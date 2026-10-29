@@ -25,6 +25,7 @@ from telegram.ext import (
 
 from ai_writer import generate_carousel_content, analyze_user_message
 from renderer import render_carousel_slides
+from asset_manager import save_user_asset, list_user_assets, resolve_assets_from_text
 
 load_dotenv()
 
@@ -35,6 +36,7 @@ logger = logging.getLogger(__name__)
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
+# Render health-check server for 100% Free Web Service hosting
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
@@ -55,7 +57,6 @@ def run_health_server():
     except Exception as e:
         logger.error(f"Health server error: {e}")
 
-
 # Store user state across chats
 USER_SESSIONS = {}
 USER_MEDIA_GROUPS = {}
@@ -71,37 +72,50 @@ def get_session(chat_id: int):
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     welcome_text = (
-        "Arre bro! Mai hoon Ron — tera AI Carousel Partner. 🤝\n\n"
-        "Mujhme **Gemini 2.5 Flash** ki full intelligence loaded hai:\n\n"
-        "💬 *Smart Chat & Brain*:\n"
-        "• **Normal Baat Karo**: Kisi bhi cheez pe discuss karo, mai Antigravity ki tarah jawab dunga.\n"
-        "• **Instructions Do**: Koi bhi rule bolo (e.g. *'bhai pet cover dhyan se karna'*, *'text 1 line hi rakhna'*), mai turant samajh kar lock kar lunga.\n"
-        "• **Work Command**: Jab bhi bolo *'bana do'*, *'start karo'*, ya *'#make'*, mai instantly high-res carousel render kar dunga! 🚀\n\n"
-        "📸 **Bas photos bhej do aur baat shuru karo!**"
+        "Arre Yash bhai! Mai hoon Ron — tera personal AI Carousel Creator. 🤝\n\n"
+        "✨ *Kya-kya kar sakta hoon mai*:\n"
+        "• **1 Photo Se Bhi 5 Slides**: Sirf 1 photo doge toh bhi hero cover + floating glass cards ke sath luxury carousel banega.\n"
+        "• **Photo Codewords / Memory**: Photo bhejte time caption me `#save bank` ya `#save uncle` likh do — mai hamesha ke liye save kar lunga. Future me bas `@bank` likhoge aur mai seedha memory se utha lunga!\n"
+        "• **Smart Intent Brain**: Mujhse dost ki tarah baat karo, instructions do (e.g. *'text 1 line rakhna'*, *'pet dhyan se cover karna'*), mai turant lock kar lunga.\n"
+        "• **Work Command**: Jab finalize ho, bas bolo *'bana do'*, *'make it'*, ya *'#make <heading>'*!\n\n"
+        "Batao bhai, aaj kiska carousel banana hai?"
     )
     await update.message.reply_text(welcome_text, parse_mode="Markdown")
 
-async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    session = get_session(update.message.chat_id)
-    photos_count = len(session.get("pending_photos", []))
-    heading = session.get("pending_heading") or "None (default wealth wisdom will be used)"
-    inst = session.get("custom_instructions") or "None"
-    
-    status_text = (
-        f"📊 *Current Brain Status*:\n"
-        f"• **Saved Photos**: {photos_count}\n"
-        f"• **Active Heading**: `{heading}`\n"
-        f"• **Locked Instructions**: `{inst}`\n\n"
-        f"Ready to render? Bas bolo *'bana do'* ya *'#make'*!"
-    )
-    await update.message.reply_text(status_text, parse_mode="Markdown")
+async def assets_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.message.chat_id
+    tags = list_user_assets(chat_id)
+    if not tags:
+        await update.message.reply_text("Abhi koi photo codeword me save nahi hai bro! Photo bhejte waqt caption me `#save <name>` likh do (jaise `#save bank` ya `#save uncle`).")
+    else:
+        tags_str = ", ".join([f"`@{t}`" for t in tags])
+        await update.message.reply_text(f"📁 *Aapki Saved Photos*: {tags_str}\n\nFuture me bas prompt me `@tag` likh dena, mai memory se le lunga!")
 
 async def clear_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     session = get_session(update.message.chat_id)
     session["pending_photos"] = []
     session["pending_heading"] = None
     session["custom_instructions"] = ""
-    await update.message.reply_text("🧹 Buffer & memory cleared! Naya topic aur photos bhej sakte ho.")
+    await update.message.reply_text("🧹 Buffer cleared! Naya topic aur photos bhej sakte ho.")
+
+async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.message.chat_id
+    session = get_session(chat_id)
+    photos_count = len(session.get("pending_photos", []))
+    saved_tags = list_user_assets(chat_id)
+    tags_str = ", ".join([f"`@{t}`" for t in saved_tags]) if saved_tags else "None"
+    heading = session.get("pending_heading") or "None"
+    inst = session.get("custom_instructions") or "None"
+    
+    status_text = (
+        f"📊 *Ron Brain Status*:\n"
+        f"• **Buffer Photos**: {photos_count}\n"
+        f"• **Saved Memory Tags**: {tags_str}\n"
+        f"• **Active Heading**: `{heading}`\n"
+        f"• **Locked Instructions**: `{inst}`\n\n"
+        f"Render karne ke liye bas bolo *'bana do'*!"
+    )
+    await update.message.reply_text(status_text, parse_mode="Markdown")
 
 async def process_carousel_job(chat_id, user_images, heading, context: ContextTypes.DEFAULT_TYPE):
     session = get_session(chat_id)
@@ -116,10 +130,13 @@ async def process_carousel_job(chat_id, user_images, heading, context: ContextTy
     try:
         # Step 1: Save images to temp work_dir
         saved_images = []
-        for i, img_bytes in enumerate(user_images):
+        for i, img_item in enumerate(user_images):
             img_path = os.path.join(work_dir, f"input_{i+1}.jpg")
-            with open(img_path, "wb") as f:
-                f.write(img_bytes)
+            if isinstance(img_item, (bytes, bytearray)):
+                with open(img_path, "wb") as f:
+                    f.write(img_item)
+            elif isinstance(img_item, str) and os.path.exists(img_item):
+                shutil.copyfile(img_item, img_path)
             saved_images.append(img_path)
             
         # Step 2: Generate 1-2 line crisp copy using exact user heading & locked instructions
@@ -143,7 +160,7 @@ async def process_carousel_job(chat_id, user_images, heading, context: ContextTy
         await context.bot.edit_message_text(
             chat_id=chat_id,
             message_id=status_msg.message_id,
-            text="🎨 *Playwright 5 slides render kar raha hai (4-Photo Combo + Strategic Midriff Cover)...*",
+            text="🎨 *Playwright 5 slides render kar raha hai (Studio Quality + Strategic Midriff Cover)...*",
             parse_mode="Markdown"
         )
         
@@ -172,13 +189,13 @@ async def process_carousel_job(chat_id, user_images, heading, context: ContextTy
                 doc_group.append(InputMediaDocument(f.read(), filename=f"slide_{i+1}.png"))
         await context.bot.send_media_group(chat_id=chat_id, media=doc_group)
         
-        # Clear photos buffer after successful render
+        # Clear buffer
         session["pending_photos"] = []
         session["pending_heading"] = None
         
         await context.bot.send_message(
             chat_id=chat_id,
-            text="✅ *Bhai carousel ready hai!* Check karo aur batao kaisa laga. Instagram par post karne ke liye 100% compliant hai! 📌",
+            text="✅ *Bhai carousel ready hai!* Check karo aur batao kaisa laga. Instagram par post karne ke liye ekdum mast hai! 📌",
             parse_mode="Markdown"
         )
         
@@ -201,8 +218,19 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     photo_bytes = await photo_file.download_as_bytearray()
     
     media_group_id = msg.media_group_id
-    caption = msg.caption or ""
+    caption = (msg.caption or "").strip()
     
+    # Check if user wants to save this photo with a codeword (e.g. #save bank or save bank)
+    caption_lower = caption.lower()
+    save_tag = None
+    if "#save" in caption_lower or "save as" in caption_lower or caption_lower.startswith("save "):
+        parts = caption.replace("#save", "").replace("save as", "").replace("save", "").strip().split()
+        if parts:
+            save_tag = parts[0]
+            saved_name = save_user_asset(chat_id, save_tag, photo_bytes)
+            await msg.reply_text(f"💾 *Photo saved in memory as `@{saved_name}`!* 📸\n\nAb future me bas `@{saved_name}` likh dena, mai bina dobara maange photo le lunga!")
+            return
+            
     if media_group_id:
         if media_group_id not in USER_MEDIA_GROUPS:
             USER_MEDIA_GROUPS[media_group_id] = {
@@ -210,7 +238,6 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "caption": caption,
                 "chat_id": chat_id
             }
-            # Wait for all photos in album to arrive
             await asyncio.sleep(2.5)
             group_data = USER_MEDIA_GROUPS.pop(media_group_id, None)
             if group_data:
@@ -219,7 +246,6 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 session["pending_photos"].extend(photos)
                 count = len(session["pending_photos"])
                 
-                # Analyze caption with Gemini
                 if final_caption:
                     ctx = {
                         "photos_count": count,
@@ -231,7 +257,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     )
                     if analysis.get("intent") == "TRIGGER_MAKE":
                         heading = analysis.get("extracted_heading") or session.get("pending_heading") or final_caption
-                        await context.bot.send_message(chat_id=chat_id, text=analysis.get("reply", "Chalo shuru karte hain! 🚀"))
+                        await context.bot.send_message(chat_id=chat_id, text=analysis.get("reply", "Chalo shuru karte hain bhai! 🚀"))
                         await process_carousel_job(chat_id, session["pending_photos"], heading, context)
                         return
                     elif analysis.get("intent") == "INSTRUCTION":
@@ -242,7 +268,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         
                 await context.bot.send_message(
                     chat_id=chat_id,
-                    text=f"📸 *{len(photos)} photos mil gayi bro!* (Total: {count})\n\nKoi instruction dena ho toh batao, ya seedha bolo *'bana do'* / *'#make <heading>'*!",
+                    text=f"📸 *{len(photos)} photos mil gayi bhai!* (Total: {count})\n\nKoi instruction dena ho toh batao, ya seedha bolo *'bana do'*!",
                     parse_mode="Markdown"
                 )
         else:
@@ -265,7 +291,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             if analysis.get("intent") == "TRIGGER_MAKE":
                 heading = analysis.get("extracted_heading") or session.get("pending_heading") or caption
-                await context.bot.send_message(chat_id=chat_id, text=analysis.get("reply", "Chalo shuru karte hain! 🚀"))
+                await context.bot.send_message(chat_id=chat_id, text=analysis.get("reply", "Chalo shuru karte hain bhai! 🚀"))
                 await process_carousel_job(chat_id, session["pending_photos"], heading, context)
                 return
             elif analysis.get("intent") == "INSTRUCTION":
@@ -276,7 +302,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
         await context.bot.send_message(
             chat_id=chat_id,
-            text=f"📸 *Photo save ho gayi!* (Total: {count} photos)\n\nJab aur photos bhejni ho bhej do, ya bolo *'bana do'*!",
+            text=f"📸 *Photo save ho gayi!* (Total: {count} photo)\n\nSirf isi 1 photo pe banana hai toh bolo *'bana do'*, ya aur photos bhej sakte ho!",
             parse_mode="Markdown"
         )
 
@@ -286,15 +312,23 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     raw_text = msg.text.strip()
     session = get_session(chat_id)
     
-    # 1. Quick commands
     if raw_text.lower() in ["/clear", "#clear", "clear"]:
         await clear_command(update, context)
         return
     if raw_text.lower() in ["/status", "#status", "status"]:
         await status_command(update, context)
         return
+    if raw_text.lower() in ["/assets", "#assets", "assets"]:
+        await assets_command(update, context)
+        return
         
-    # 2. Run through Gemini 2.5 Flash intelligence
+    # Check if user mentioned saved asset codewords (e.g. @bank, @uncle)
+    resolved_paths = resolve_assets_from_text(chat_id, raw_text)
+    if resolved_paths:
+        for p in resolved_paths:
+            if p not in session["pending_photos"]:
+                session["pending_photos"].append(p)
+                
     ctx = {
         "photos_count": len(session.get("pending_photos", [])),
         "active_heading": session.get("pending_heading"),
@@ -306,7 +340,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     
     intent = analysis.get("intent", "CHAT")
-    reply = analysis.get("reply", "Haan bro!")
+    reply = analysis.get("reply", "Haan bhai!")
     extracted_inst = analysis.get("extracted_instruction")
     extracted_heading = analysis.get("extracted_heading")
     
@@ -320,17 +354,18 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
         
     elif intent == "TRIGGER_MAKE":
-        if len(session["pending_photos"]) == 0:
-            await update.message.reply_text(f"{reply}\n\n⚠️ Lekin pehle **photos bhej do** (1 se 4 photos), fir render shuru kar dunga!")
+        photos = session.get("pending_photos", [])
+        if len(photos) == 0:
+            await update.message.reply_text(f"{reply}\n\n⚠️ Lekin pehle **photo bhej do** (ya kisi saved tag jaise `@bank` ko mention karo), fir turant bana dunga!")
             return
             
         final_heading = extracted_heading or session.get("pending_heading") or "Being a daughter of a mutual fund distributor, I know one thing…"
         await update.message.reply_text(reply)
-        await process_carousel_job(chat_id, session["pending_photos"], final_heading, context)
+        await process_carousel_job(chat_id, photos, final_heading, context)
         return
         
     else:
-        # Normal chat
+        # Casual chat
         await update.message.reply_text(reply)
 
 def main():
@@ -341,12 +376,13 @@ def main():
     
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CommandHandler("status", status_command))
+    app.add_handler(CommandHandler("assets", assets_command))
     app.add_handler(CommandHandler("clear", clear_command))
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     
     threading.Thread(target=run_health_server, daemon=True).start()
-    logger.info("Ron Carousel Agent (Full Gemini Intelligence) is live on Telegram! Waiting for messages...")
+    logger.info("Ron Carousel Agent (Full Upgrades + Asset Memory) is live on Telegram! Waiting for messages...")
     app.run_polling()
 
 if __name__ == "__main__":

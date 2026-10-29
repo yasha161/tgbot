@@ -8,8 +8,7 @@ face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_fronta
 
 def enhance_studio_quality(pil_img: Image.Image) -> Image.Image:
     """
-    Applies studio-grade contrast, sharpness, and rich color grading
-    so candid photos look high-end, eye-catching, and clean.
+    Applies studio-grade contrast, sharpness, and rich color grading.
     """
     img = ImageEnhance.Contrast(pil_img).enhance(1.12)
     img = ImageEnhance.Sharpness(img).enhance(1.22)
@@ -50,8 +49,6 @@ def smart_face_crop(img_path: str, target_w: int, target_h: int, face_position: 
     
     if face:
         cx, cy, fw, fh = face
-        
-        # Determine crop height: aim for pleasant medium portrait where face is ~20% of frame
         ideal_crop_h = int(fh * 4.8)
         crop_h = max(int(h * 0.7), min(h, ideal_crop_h))
         crop_w = int(crop_h * target_aspect)
@@ -60,16 +57,13 @@ def smart_face_crop(img_path: str, target_w: int, target_h: int, face_position: 
             crop_w = w
             crop_h = int(w / target_aspect)
             
-        # Vertical placement
         if face_position == "top":
-            # Place face center at ~26% from top
             crop_top = max(0, int(cy - crop_h * 0.26))
             crop_bottom = crop_top + crop_h
             if crop_bottom > h:
                 crop_bottom = h
                 crop_top = max(0, crop_bottom - crop_h)
         elif face_position == "bottom":
-            # Place face lower down, ~65% from top
             crop_top = max(0, int(cy - crop_h * 0.65))
             crop_bottom = crop_top + crop_h
             if crop_bottom > h:
@@ -82,7 +76,6 @@ def smart_face_crop(img_path: str, target_w: int, target_h: int, face_position: 
                 crop_bottom = h
                 crop_top = max(0, crop_bottom - crop_h)
                 
-        # Horizontal center on face
         crop_left = max(0, int(cx - crop_w / 2))
         crop_right = crop_left + crop_w
         if crop_right > w:
@@ -91,7 +84,6 @@ def smart_face_crop(img_path: str, target_w: int, target_h: int, face_position: 
             
         cropped = enhanced.crop((crop_left, crop_top, crop_right, crop_bottom))
     else:
-        # Fallback if no face detected: natural center/top crop
         current_aspect = w / h
         if current_aspect < target_aspect:
             crop_h = int(w / target_aspect)
@@ -165,12 +157,71 @@ def build_slide1_combo_html(q_paths, headline, highlight):
 </body>
 </html>"""
 
-def build_inside_slide_html(bg_path, title, lines, cta=None):
+def build_single_photo_cover_html(bg_path, headline, highlight):
+    bg_url = f"file:///{bg_path.replace(os.sep, '/')}"
+    headline_clean = headline.replace("\n", "<br>")
+    
+    return f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800;900&display=swap" rel="stylesheet">
+    <style>
+        * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+        body {{
+            width: 1080px; height: 1350px; overflow: hidden; position: relative;
+            background-color: #06090F; font-family: 'Plus Jakarta Sans', sans-serif;
+        }}
+        .photo-layer {{
+            position: absolute; inset: 0; background-image: url('{bg_url}');
+            background-size: cover; background-position: center top; z-index: 1;
+        }}
+        .floating-tag {{
+            position: absolute; top: 60px; left: 50%; transform: translateX(-50%);
+            z-index: 10; background: rgba(0, 0, 0, 0.65); backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 222, 67, 0.4); border-radius: 9999px;
+            padding: 10px 28px; color: #FFDE43; font-size: 15px; font-weight: 800;
+            letter-spacing: 2px; text-transform: uppercase;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }}
+        .bottom-scrim {{
+            position: absolute; bottom: 0; left: 0; width: 1080px; height: 650px;
+            background: linear-gradient(to top, rgba(5,8,14,0.99) 0%, rgba(5,8,14,0.92) 50%, rgba(5,8,14,0.55) 80%, rgba(5,8,14,0) 100%);
+            z-index: 5; pointer-events: none;
+        }}
+        .text-container {{
+            position: absolute; bottom: 80px; left: 55px; right: 55px; z-index: 10;
+            text-align: center; display: flex; flex-direction: column; align-items: center; gap: 20px;
+        }}
+        .cover-headline {{
+            color: #FFDE43; font-size: 48px; font-weight: 800; line-height: 1.25;
+            letter-spacing: -0.5px; text-shadow: 0 4px 20px rgba(0,0,0,0.95), 0 2px 4px rgba(0,0,0,0.9);
+            max-width: 960px;
+        }}
+        .cover-headline span {{ color: #FFFFFF; }}
+        .swipe-badge {{
+            font-size: 14px; font-weight: 800; letter-spacing: 2px; color: #FFFFFF;
+            background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.25);
+            padding: 10px 28px; border-radius: 9999px; text-transform: uppercase;
+        }}
+    </style>
+</head>
+<body>
+    <div class="photo-layer"></div>
+    <div class="floating-tag">💡 REAL WEALTH WISDOM</div>
+    <div class="bottom-scrim"></div>
+    <div class="text-container">
+        <h1 class="cover-headline">{headline_clean}<br><span>{highlight}</span></h1>
+        <div class="swipe-badge">SWIPE TO READ ➔</div>
+    </div>
+</body>
+</html>"""
+
+def build_glass_card_slide_html(bg_path, title, lines, icon="💡", cta=None):
     bg_url = f"file:///{bg_path.replace(os.sep, '/')}"
     lines_html = "".join([f'<p class="body-line">{line}</p>' for line in lines])
     cta_html = f'<div class="cta-badge">{cta}</div>' if cta else ""
     
-    # Notice: height: 620px covers the midriff/stomach gracefully while keeping face untouched!
     return f"""<!DOCTYPE html>
 <html>
 <head>
@@ -190,6 +241,12 @@ def build_inside_slide_html(bg_path, title, lines, cta=None):
             position: absolute; bottom: 0; left: 0; width: 1080px; height: 620px;
             background: linear-gradient(to top, rgba(5,8,14,0.99) 0%, rgba(5,8,14,0.90) 50%, rgba(5,8,14,0.55) 78%, rgba(5,8,14,0) 100%);
             z-index: 5; pointer-events: none;
+        }}
+        .floating-pill {{
+            display: inline-flex; align-items: center; gap: 8px;
+            background: rgba(255, 222, 67, 0.15); border: 1.5px solid rgba(255, 222, 67, 0.4);
+            border-radius: 9999px; padding: 6px 20px; color: #FFDE43;
+            font-size: 14px; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase;
         }}
         .text-container {{
             position: absolute; bottom: 75px; left: 55px; right: 55px; z-index: 10;
@@ -217,6 +274,7 @@ def build_inside_slide_html(bg_path, title, lines, cta=None):
     <div class="photo-layer"></div>
     <div class="bottom-scrim"></div>
     <div class="text-container">
+        <div class="floating-pill">{icon} INSIGHT</div>
         <h2 class="headline">{title}</h2>
         <div class="body-stack">{lines_html}</div>
         {cta_html}
@@ -228,7 +286,7 @@ async def render_carousel_slides(content_data: dict, image_paths: list, work_dir
     os.makedirs(work_dir, exist_ok=True)
     html_files = []
     
-    # 1. Slide 1 (4-photo combo if 4+ images, else single background)
+    # 1. Slide 1 (4-photo combo if 4+ images, else polished single photo hero cover)
     if len(image_paths) >= 4:
         q_paths = []
         positions = ["top", "top", "bottom", "bottom"]
@@ -242,26 +300,27 @@ async def render_carousel_slides(content_data: dict, image_paths: list, work_dir
         s1_img = smart_face_crop(image_paths[0], 1080, 1350, "top")
         s1_bg = os.path.join(work_dir, "bg_s1.jpg")
         s1_img.save(s1_bg, quality=95)
-        s1_html = build_inside_slide_html(s1_bg, content_data["slide1"]["headline"], [content_data["slide1"]["highlight"]])
+        s1_html = build_single_photo_cover_html(s1_bg, content_data["slide1"]["headline"], content_data["slide1"]["highlight"])
         
     s1_path = os.path.join(work_dir, "slide_1.html")
     with open(s1_path, "w", encoding="utf-8") as f:
         f.write(s1_html)
     html_files.append((s1_path, os.path.join(work_dir, "slide_1.png")))
     
-    # 2. Inside Slides 2 to 5
+    # 2. Inside Slides 2 to 5 with floating icons & styling
+    icons = ["⚡", "📈", "🛡️", "🚀"]
     for s_idx, key in enumerate(["slide2", "slide3", "slide4", "slide5"]):
         slide_num = s_idx + 2
         img_src = image_paths[(s_idx + 1) % len(image_paths)]
         
-        # Crop keeping face in upper half and tummy in lower text area
         s_img = smart_face_crop(img_src, 1080, 1350, "top")
         bg_out = os.path.join(work_dir, f"bg_s{slide_num}.jpg")
         s_img.save(bg_out, quality=95)
         
         s_data = content_data[key]
         cta = s_data.get("cta") if key == "slide5" else None
-        s_html = build_inside_slide_html(bg_out, s_data["title"], s_data["lines"], cta)
+        icon = icons[s_idx % len(icons)]
+        s_html = build_glass_card_slide_html(bg_out, s_data["title"], s_data["lines"], icon, cta)
         
         s_path = os.path.join(work_dir, f"slide_{slide_num}.html")
         with open(s_path, "w", encoding="utf-8") as f:
