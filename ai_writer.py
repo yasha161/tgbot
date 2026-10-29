@@ -8,18 +8,36 @@ load_dotenv()
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-# Optional Cloudflare AI Gateway Support for 100% Free Edge Caching & Rate Protection
-# Format: https://gateway.ai.cloudflare.com/v1/{account_id}/{gateway_id}/google-ai-studio
+# Cloudflare Workers AI & AI Gateway Credentials
+CLOUDFLARE_ACCOUNT_ID = os.getenv("CLOUDFLARE_ACCOUNT_ID", "c6e9f428b957aecbe87557c7153155c0")
+CLOUDFLARE_API_TOKEN = os.getenv("CLOUDFLARE_API_TOKEN")
 CLOUDFLARE_AI_GATEWAY_URL = os.getenv("CLOUDFLARE_AI_GATEWAY_URL")
 
 def get_gemini_endpoint(model: str = "gemini-2.5-flash", action: str = "generateContent") -> str:
-    """
-    Returns Cloudflare AI Gateway endpoint if configured, else falls back to direct Google AI Studio.
-    """
     if CLOUDFLARE_AI_GATEWAY_URL:
         base = CLOUDFLARE_AI_GATEWAY_URL.rstrip("/")
         return f"{base}/v1beta/models/{model}:{action}?key={GEMINI_API_KEY}"
     return f"https://generativelanguage.googleapis.com/v1beta/models/{model}:{action}?key={GEMINI_API_KEY}"
+
+def call_cloudflare_workers_ai(prompt: str, system_prompt: str = "") -> str:
+    """
+    Direct Cloudflare Workers AI edge fallback using Llama 3.1 70B.
+    Runs globally across 300+ data centers with 0 billing.
+    """
+    url = f"https://api.cloudflare.com/client/v4/accounts/{CLOUDFLARE_ACCOUNT_ID}/ai/run/@cf/meta/llama-3.1-70b-instruct"
+    headers = {"Authorization": f"Bearer {CLOUDFLARE_API_TOKEN}"}
+    
+    messages = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    messages.append({"role": "user", "content": prompt})
+    
+    resp = requests.post(url, headers=headers, json={"messages": messages}, timeout=25)
+    if resp.status_code == 200:
+        res_data = resp.json().get("result", {})
+        return res_data.get("response", "")
+    else:
+        raise RuntimeError(f"Cloudflare Workers AI failed ({resp.status_code}): {resp.text}")
 
 INTELLIGENCE_SYSTEM_PROMPT = """
 You are Ron, an elite AI creative partner and Instagram Carousel strategist (just like Antigravity).
@@ -96,6 +114,16 @@ Return strictly valid JSON with this schema:
 
 USER_CONVERSATIONS = {}
 
+def clean_json_response(raw_text: str) -> dict:
+    text = raw_text.strip()
+    if text.startswith("```json"):
+        text = text[7:]
+    elif text.startswith("```"):
+        text = text[3:]
+    if text.endswith("```"):
+        text = text[:-3]
+    return json.loads(text.strip())
+
 def analyze_user_message(user_id: int, user_message: str, current_context: dict) -> dict:
     url = get_gemini_endpoint("gemini-2.5-flash", "generateContent")
     
@@ -117,6 +145,7 @@ def analyze_user_message(user_id: int, user_message: str, current_context: dict)
         "generationConfig": {"responseMimeType": "application/json"}
     }
     
+    # Primary: Gemini 2.5 Flash
     try:
         resp = requests.post(url, json=payload, timeout=15)
         if resp.status_code == 200:
@@ -125,17 +154,24 @@ def analyze_user_message(user_id: int, user_message: str, current_context: dict)
             history.append({"role": "user", "parts": [{"text": user_message}]})
             history.append({"role": "model", "parts": [{"text": parsed.get("reply", "")}]})
             return parsed
-        else:
-            return {
-                "intent": "CHAT",
-                "reply": "Bhai ek baar dobara bolo, connection thoda slow tha.",
-                "extracted_instruction": None,
-                "extracted_heading": None
-            }
     except Exception as e:
+        print(f"Gemini error, trying Cloudflare fallback: {e}")
+        
+    # Secondary: Cloudflare Workers AI Fallback
+    try:
+        cf_raw = call_cloudflare_workers_ai(
+            f"{context_note}\n\nUser message: {user_message}\nReturn strictly JSON with intent, reply, extracted_instruction, extracted_heading.",
+            INTELLIGENCE_SYSTEM_PROMPT
+        )
+        parsed = clean_json_response(cf_raw)
+        history.append({"role": "user", "parts": [{"text": user_message}]})
+        history.append({"role": "model", "parts": [{"text": parsed.get("reply", "")}]})
+        return parsed
+    except Exception as e2:
+        print(f"Cloudflare fallback error: {e2}")
         return {
             "intent": "CHAT",
-            "reply": f"Bhai issue aaya: {str(e)}",
+            "reply": "Haan bhai, sun raha hoon! Batao kya instruction ya idea hai?",
             "extracted_instruction": None,
             "extracted_heading": None
         }
@@ -169,10 +205,18 @@ def generate_carousel_content(user_heading: str, image_paths: list = None, custo
         "generationConfig": {"responseMimeType": "application/json"}
     }
     
-    resp = requests.post(url, json=payload, timeout=20)
-    if resp.status_code != 200:
-        raise RuntimeError(f"Gemini API Error ({resp.status_code}): {resp.text}")
+    # Primary: Gemini
+    try:
+        resp = requests.post(url, json=payload, timeout=20)
+        if resp.status_code == 200:
+            raw_text = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+            return json.loads(raw_text)
+    except Exception as e:
+        print(f"Gemini carousel generation error, falling back to Cloudflare Workers AI: {e}")
         
-    data = resp.json()
-    raw_text = data["candidates"][0]["content"]["parts"][0]["text"]
-    return json.loads(raw_text)
+    # Secondary: Cloudflare Workers AI Llama 3.1 70B
+    cf_res = call_cloudflare_workers_ai(
+        prompt_text + "\n\nReturn strictly valid JSON only with keys: slide1, slide2, slide3, slide4, slide5.",
+        CAROUSEL_SYSTEM_PROMPT
+    )
+    return clean_json_response(cf_res)
