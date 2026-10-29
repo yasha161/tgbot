@@ -66,37 +66,27 @@ def get_session(chat_id: int):
         USER_SESSIONS[chat_id] = {
             "pending_photos": [],
             "pending_heading": None,
-            "custom_instructions": ""
+            "custom_instructions": "",
+            "is_3d_mode": False,
+            "special_edit": ""
         }
     return USER_SESSIONS[chat_id]
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     welcome_text = (
-        "Arre Yash bhai! Mai hoon Ron — tera personal AI Carousel Creator. 🤝\n\n"
-        "✨ *Kya-kya kar sakta hoon mai*:\n"
-        "• **1 Photo Se Bhi 5 Slides**: Sirf 1 photo doge toh bhi hero cover + floating glass cards ke sath luxury carousel banega.\n"
-        "• **Photo Codewords / Memory**: Photo bhejte time caption me `#save bank` ya `#save uncle` likh do — mai hamesha ke liye save kar lunga. Future me bas `@bank` likhoge aur mai seedha memory se utha lunga!\n"
-        "• **Smart Intent Brain**: Mujhse dost ki tarah baat karo, instructions do (e.g. *'text 1 line rakhna'*, *'pet dhyan se cover karna'*), mai turant lock kar lunga.\n"
-        "• **Work Command**: Jab finalize ho, bas bolo *'bana do'*, *'make it'*, ya *'#make <heading>'*!\n\n"
-        "Batao bhai, aaj kiska carousel banana hai?"
+        "Arre Yash bhai! Mai hoon Ron — tera AI Carousel Partner. 🤝\n\n"
+        "⚡ *Special Secret Trigger Codes*:\n"
+        "• `312make <heading>`: Instant carousel render trigger (100% precision).\n"
+        "• `312make #3d <heading>`: **3D Elements Mode** (Floating 3D metallic badges, glass cards & deep gold glow).\n"
+        "• `987inst <instruction>`: Custom instruction lock karega (e.g. *987inst pet dhyan se cover karna*).\n"
+        "• `456head <heading>`: Exact heading lock karega bina render kiye.\n"
+        "• `789style 3d`: 3D mode on/off toggle karega.\n"
+        "• `000status`: Memory aur photos check karega.\n"
+        "• `111reset`: Sab clear karega.\n\n"
+        "💾 *Memory Tags*: Photo ke caption me `#save bank` likho, future me bas `@bank` likh kar bula lo!\n\n"
+        "Batao bhai, kya instruction ya topic hai?"
     )
     await update.message.reply_text(welcome_text, parse_mode="Markdown")
-
-async def assets_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.message.chat_id
-    tags = list_user_assets(chat_id)
-    if not tags:
-        await update.message.reply_text("Abhi koi photo codeword me save nahi hai bro! Photo bhejte waqt caption me `#save <name>` likh do (jaise `#save bank` ya `#save uncle`).")
-    else:
-        tags_str = ", ".join([f"`@{t}`" for t in tags])
-        await update.message.reply_text(f"📁 *Aapki Saved Photos*: {tags_str}\n\nFuture me bas prompt me `@tag` likh dena, mai memory se le lunga!")
-
-async def clear_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    session = get_session(update.message.chat_id)
-    session["pending_photos"] = []
-    session["pending_heading"] = None
-    session["custom_instructions"] = ""
-    await update.message.reply_text("🧹 Buffer cleared! Naya topic aur photos bhej sakte ho.")
 
 async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.message.chat_id
@@ -106,29 +96,40 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     tags_str = ", ".join([f"`@{t}`" for t in saved_tags]) if saved_tags else "None"
     heading = session.get("pending_heading") or "None"
     inst = session.get("custom_instructions") or "None"
+    mode = "3D Luxury Mode 💎" if session.get("is_3d_mode") else "Standard Clean Studio 📸"
     
     status_text = (
         f"📊 *Ron Brain Status*:\n"
         f"• **Buffer Photos**: {photos_count}\n"
         f"• **Saved Memory Tags**: {tags_str}\n"
         f"• **Active Heading**: `{heading}`\n"
-        f"• **Locked Instructions**: `{inst}`\n\n"
-        f"Render karne ke liye bas bolo *'bana do'*!"
+        f"• **Locked Instructions**: `{inst}`\n"
+        f"• **Visual Style**: `{mode}`\n\n"
+        f"Render karne ke liye bas likho `312make` ya `#make`!"
     )
     await update.message.reply_text(status_text, parse_mode="Markdown")
 
-async def process_carousel_job(chat_id, user_images, heading, context: ContextTypes.DEFAULT_TYPE):
+async def clear_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    session = get_session(update.message.chat_id)
+    session["pending_photos"] = []
+    session["pending_heading"] = None
+    session["custom_instructions"] = ""
+    session["is_3d_mode"] = False
+    session["special_edit"] = ""
+    await update.message.reply_text("🧹 Buffer & styling reset! Naya topic aur photos bhej sakte ho.")
+
+async def process_carousel_job(chat_id, user_images, heading, is_3d: bool, context: ContextTypes.DEFAULT_TYPE):
     session = get_session(chat_id)
+    style_label = "3D Luxury Mode (Floating Badges & Gold Glow)" if is_3d else "Standard Clean Studio"
     status_msg = await context.bot.send_message(
         chat_id=chat_id,
-        text="⏳ *Photos process ho rahi hain... Face detection, natural 4:5 framing & studio polish shuru!*",
+        text=f"⏳ *Photos process ho rahi hain... [{style_label}] shuru!*",
         parse_mode="Markdown"
     )
     
     work_dir = tempfile.mkdtemp(prefix="carousel_bot_")
     
     try:
-        # Step 1: Save images to temp work_dir
         saved_images = []
         for i, img_item in enumerate(user_images):
             img_path = os.path.join(work_dir, f"input_{i+1}.jpg")
@@ -139,7 +140,6 @@ async def process_carousel_job(chat_id, user_images, heading, context: ContextTy
                 shutil.copyfile(img_item, img_path)
             saved_images.append(img_path)
             
-        # Step 2: Generate 1-2 line crisp copy using exact user heading & locked instructions
         await context.bot.edit_message_text(
             chat_id=chat_id,
             message_id=status_msg.message_id,
@@ -156,17 +156,15 @@ async def process_carousel_job(chat_id, user_images, heading, context: ContextTy
             session.get("custom_instructions", "")
         )
         
-        # Step 3: Render 1080x1350 Slides with Playwright
         await context.bot.edit_message_text(
             chat_id=chat_id,
             message_id=status_msg.message_id,
-            text="🎨 *Playwright 5 slides render kar raha hai (Studio Quality + Strategic Midriff Cover)...*",
+            text="🎨 *Playwright 5 slides render kar raha hai (Face Safe + Strategic Midriff Cover)...*",
             parse_mode="Markdown"
         )
         
-        png_slides = await render_carousel_slides(content_data, saved_images, work_dir)
+        png_slides = await render_carousel_slides(content_data, saved_images, work_dir, is_3d, session.get("special_edit", ""))
         
-        # Step 4: Upload Media Album
         await context.bot.edit_message_text(
             chat_id=chat_id,
             message_id=status_msg.message_id,
@@ -182,20 +180,18 @@ async def process_carousel_job(chat_id, user_images, heading, context: ContextTy
                 
         await context.bot.send_media_group(chat_id=chat_id, media=media_group)
         
-        # Step 5: Send uncompressed PNG documents for lossless quality
         doc_group = []
         for i, slide_path in enumerate(png_slides):
             with open(slide_path, "rb") as f:
                 doc_group.append(InputMediaDocument(f.read(), filename=f"slide_{i+1}.png"))
         await context.bot.send_media_group(chat_id=chat_id, media=doc_group)
         
-        # Clear buffer
         session["pending_photos"] = []
         session["pending_heading"] = None
         
         await context.bot.send_message(
             chat_id=chat_id,
-            text="✅ *Bhai carousel ready hai!* Check karo aur batao kaisa laga. Instagram par post karne ke liye ekdum mast hai! 📌",
+            text="✅ *Bhai carousel ready hai!* Check karo aur batao kaisa laga. Instagram par post karne ke liye 100% compliant hai! 📌",
             parse_mode="Markdown"
         )
         
@@ -219,18 +215,21 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     media_group_id = msg.media_group_id
     caption = (msg.caption or "").strip()
-    
-    # Check if user wants to save this photo with a codeword (e.g. #save bank or save bank)
     caption_lower = caption.lower()
-    save_tag = None
+    
+    # Check save tag
     if "#save" in caption_lower or "save as" in caption_lower or caption_lower.startswith("save "):
         parts = caption.replace("#save", "").replace("save as", "").replace("save", "").strip().split()
         if parts:
             save_tag = parts[0]
             saved_name = save_user_asset(chat_id, save_tag, photo_bytes)
-            await msg.reply_text(f"💾 *Photo saved in memory as `@{saved_name}`!* 📸\n\nAb future me bas `@{saved_name}` likh dena, mai bina dobara maange photo le lunga!")
+            await msg.reply_text(f"💾 *Photo saved as `@{saved_name}`!* 📸\n\nAb future me bas `@{saved_name}` likh dena, mai memory se le lunga!")
             return
-            
+
+    # Check 312make trigger in caption
+    is_3d = ("#3d" in caption_lower) or ("3d" in caption_lower) or session.get("is_3d_mode", False)
+    has_make_trigger = ("312make" in caption_lower) or ("#make" in caption_lower) or ("#banao" in caption_lower)
+    
     if media_group_id:
         if media_group_id not in USER_MEDIA_GROUPS:
             USER_MEDIA_GROUPS[media_group_id] = {
@@ -246,89 +245,119 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 session["pending_photos"].extend(photos)
                 count = len(session["pending_photos"])
                 
-                if final_caption:
-                    ctx = {
-                        "photos_count": count,
-                        "active_heading": session.get("pending_heading"),
-                        "instructions": session.get("custom_instructions")
-                    }
-                    analysis = await asyncio.get_event_loop().run_in_executor(
-                        None, analyze_user_message, chat_id, final_caption, ctx
+                final_lower = final_caption.lower()
+                is_3d_final = ("#3d" in final_lower) or ("3d" in final_lower) or session.get("is_3d_mode", False)
+                trigger_final = ("312make" in final_lower) or ("#make" in final_lower) or ("#banao" in final_lower)
+                
+                if trigger_final:
+                    heading = final_caption.replace("312make", "").replace("#make", "").replace("#banao", "").replace("#3d", "").strip()
+                    if not heading:
+                        heading = session.get("pending_heading") or "Being a daughter of a mutual fund distributor, I know one thing…"
+                    await process_carousel_job(chat_id, session["pending_photos"], heading, is_3d_final, context)
+                else:
+                    await context.bot.send_message(
+                        chat_id=chat_id,
+                        text=f"📸 *{len(photos)} photos receive ho gayi bhai!* (Total: {count})\n\nJab render karna ho, bas likho `312make <heading>` ya normal baat karo!",
+                        parse_mode="Markdown"
                     )
-                    if analysis.get("intent") == "TRIGGER_MAKE":
-                        heading = analysis.get("extracted_heading") or session.get("pending_heading") or final_caption
-                        await context.bot.send_message(chat_id=chat_id, text=analysis.get("reply", "Chalo shuru karte hain bhai! 🚀"))
-                        await process_carousel_job(chat_id, session["pending_photos"], heading, context)
-                        return
-                    elif analysis.get("intent") == "INSTRUCTION":
-                        inst = analysis.get("extracted_instruction")
-                        session["custom_instructions"] = f"{session.get('custom_instructions', '')} | {inst}".strip(" |")
-                        await context.bot.send_message(chat_id=chat_id, text=analysis.get("reply"))
-                        return
-                        
-                await context.bot.send_message(
-                    chat_id=chat_id,
-                    text=f"📸 *{len(photos)} photos mil gayi bhai!* (Total: {count})\n\nKoi instruction dena ho toh batao, ya seedha bolo *'bana do'*!",
-                    parse_mode="Markdown"
-                )
         else:
             USER_MEDIA_GROUPS[media_group_id]["photos"].append(photo_bytes)
             if caption:
                 USER_MEDIA_GROUPS[media_group_id]["caption"] = caption
     else:
-        # Single photo sent
         session["pending_photos"].append(photo_bytes)
         count = len(session["pending_photos"])
         
-        if caption:
-            ctx = {
-                "photos_count": count,
-                "active_heading": session.get("pending_heading"),
-                "instructions": session.get("custom_instructions")
-            }
-            analysis = await asyncio.get_event_loop().run_in_executor(
-                None, analyze_user_message, chat_id, caption, ctx
+        if has_make_trigger:
+            heading = caption.replace("312make", "").replace("#make", "").replace("#banao", "").replace("#3d", "").strip()
+            if not heading:
+                heading = session.get("pending_heading") or "Being a daughter of a mutual fund distributor, I know one thing…"
+            await process_carousel_job(chat_id, session["pending_photos"], heading, is_3d, context)
+        else:
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=f"📸 *Photo save ho gayi!* (Total: {count} photo)\n\nJab banana ho, bas `312make <heading>` likh dena!",
+                parse_mode="Markdown"
             )
-            if analysis.get("intent") == "TRIGGER_MAKE":
-                heading = analysis.get("extracted_heading") or session.get("pending_heading") or caption
-                await context.bot.send_message(chat_id=chat_id, text=analysis.get("reply", "Chalo shuru karte hain bhai! 🚀"))
-                await process_carousel_job(chat_id, session["pending_photos"], heading, context)
-                return
-            elif analysis.get("intent") == "INSTRUCTION":
-                inst = analysis.get("extracted_instruction")
-                session["custom_instructions"] = f"{session.get('custom_instructions', '')} | {inst}".strip(" |")
-                await context.bot.send_message(chat_id=chat_id, text=analysis.get("reply"))
-                return
-                
-        await context.bot.send_message(
-            chat_id=chat_id,
-            text=f"📸 *Photo save ho gayi!* (Total: {count} photo)\n\nSirf isi 1 photo pe banana hai toh bolo *'bana do'*, ya aur photos bhej sakte ho!",
-            parse_mode="Markdown"
-        )
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
     chat_id = msg.chat_id
     raw_text = msg.text.strip()
+    lower_text = raw_text.lower()
     session = get_session(chat_id)
     
-    if raw_text.lower() in ["/clear", "#clear", "clear"]:
+    # 1. Secret Reset Code: 111reset or /clear
+    if lower_text in ["111reset", "/clear", "#clear", "clear"]:
         await clear_command(update, context)
         return
-    if raw_text.lower() in ["/status", "#status", "status"]:
+        
+    # 2. Secret Status Code: 000status or /status
+    if lower_text in ["000status", "/status", "#status", "status"]:
         await status_command(update, context)
         return
-    if raw_text.lower() in ["/assets", "#assets", "assets"]:
-        await assets_command(update, context)
-        return
         
-    # Check if user mentioned saved asset codewords (e.g. @bank, @uncle)
+    # 3. Assets list: /assets
+    if lower_text in ["/assets", "#assets", "assets"]:
+        tags = list_user_assets(chat_id)
+        tags_str = ", ".join([f"`@{t}`" for t in tags]) if tags else "None"
+        await update.message.reply_text(f"📁 *Saved Memory Tags*: {tags_str}\n\nPrompt me `@tag` likhoge toh mai direct use kar lunga!")
+        return
+
+    # 4. Secret Instruction Code: 987inst <instruction>
+    if lower_text.startswith("987inst") or lower_text.startswith(("#inst", "/inst")):
+        inst_text = raw_text.replace("987inst", "").replace("#inst", "").replace("/inst", "").strip()
+        session["custom_instructions"] = f"{session.get('custom_instructions', '')} | {inst_text}".strip(" |")
+        await update.message.reply_text(f"🔒 *Instruction Locked [987inst]*: `{inst_text}`\n\nAgle carousels me ye strictly apply hoga!", parse_mode="Markdown")
+        return
+
+    # 5. Secret Heading Code: 456head <heading>
+    if lower_text.startswith("456head") or lower_text.startswith(("#heading", "/heading")):
+        head_text = raw_text.replace("456head", "").replace("#heading", "").replace("/heading", "").strip()
+        session["pending_heading"] = head_text
+        await update.message.reply_text(f"📌 *Heading Locked [456head]*: `{head_text}`\n\nAb jab bhi `312make` likhoge, ye exact heading use hogi!", parse_mode="Markdown")
+        return
+
+    # 6. Secret Style Code: 789style 3d / #3d
+    if lower_text.startswith("789style") or lower_text in ["#3d", "3d mode", "special edit"]:
+        if "3d" in lower_text:
+            session["is_3d_mode"] = True
+            await update.message.reply_text("💎 *3D Luxury Style Activated [789style]*!\nFloating metallic badges, 3D perspective glass cards aur deep gold glow use honge.")
+        else:
+            session["is_3d_mode"] = False
+            await update.message.reply_text("📸 *Standard Studio Style Set*!")
+        return
+
+    # Check for saved asset codewords in text (@bank, @uncle)
     resolved_paths = resolve_assets_from_text(chat_id, raw_text)
     if resolved_paths:
         for p in resolved_paths:
             if p not in session["pending_photos"]:
                 session["pending_photos"].append(p)
-                
+
+    # 7. Secret Trigger Make Code: 312make [heading]
+    is_312make = lower_text.startswith("312make") or lower_text.startswith(("#make", "#banao", "/make", "/banao"))
+    
+    if is_312make:
+        photos = session.get("pending_photos", [])
+        if len(photos) == 0:
+            await update.message.reply_text("⚠️ Bhai photos nahi aayi abhi! 1 se 4 photos bhej do (ya saved memory tag jaise `@bank` likho), fir `312make` bolo.")
+            return
+            
+        is_3d = ("#3d" in lower_text) or ("3d" in lower_text) or session.get("is_3d_mode", False)
+        
+        # Clean heading
+        heading = raw_text
+        for prefix in ["312make", "#make", "#banao", "/make", "/banao", "#3d"]:
+            heading = heading.replace(prefix, "")
+        heading = heading.strip() or session.get("pending_heading") or "Being a daughter of a mutual fund distributor, I know one thing…"
+        
+        mode_text = "💎 3D Luxury Elements" if is_3d else "📸 Standard Studio"
+        await update.message.reply_text(f"🚀 *Work Triggered [312make]*\nHeading: `{heading}`\nStyle: `{mode_text}`\n\nRender shuru ho raha hai...", parse_mode="Markdown")
+        await process_carousel_job(chat_id, photos, heading, is_3d, context)
+        return
+
+    # 8. Otherwise: 100% Normal Friendly Chat (Gemini 2.5 Flash Brain)
     ctx = {
         "photos_count": len(session.get("pending_photos", [])),
         "active_heading": session.get("pending_heading"),
@@ -352,20 +381,16 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             session["custom_instructions"] = f"{session.get('custom_instructions', '')} | {extracted_inst}".strip(" |")
         await update.message.reply_text(reply)
         return
-        
     elif intent == "TRIGGER_MAKE":
         photos = session.get("pending_photos", [])
         if len(photos) == 0:
-            await update.message.reply_text(f"{reply}\n\n⚠️ Lekin pehle **photo bhej do** (ya kisi saved tag jaise `@bank` ko mention karo), fir turant bana dunga!")
+            await update.message.reply_text(f"{reply}\n\n⚠️ Lekin pehle **photo bhej do**, fir turant bana dunga!")
             return
-            
         final_heading = extracted_heading or session.get("pending_heading") or "Being a daughter of a mutual fund distributor, I know one thing…"
         await update.message.reply_text(reply)
-        await process_carousel_job(chat_id, photos, final_heading, context)
+        await process_carousel_job(chat_id, photos, final_heading, session.get("is_3d_mode", False), context)
         return
-        
     else:
-        # Casual chat
         await update.message.reply_text(reply)
 
 def main():
@@ -376,13 +401,12 @@ def main():
     
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CommandHandler("status", status_command))
-    app.add_handler(CommandHandler("assets", assets_command))
     app.add_handler(CommandHandler("clear", clear_command))
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     
     threading.Thread(target=run_health_server, daemon=True).start()
-    logger.info("Ron Carousel Agent (Full Upgrades + Asset Memory) is live on Telegram! Waiting for messages...")
+    logger.info("Ron Carousel Agent (Secret Codes + 3D Mode) is live on Telegram! Waiting for messages...")
     app.run_polling()
 
 if __name__ == "__main__":

@@ -6,13 +6,18 @@ from playwright.async_api import async_playwright
 
 face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
 
-def enhance_studio_quality(pil_img: Image.Image) -> Image.Image:
+def enhance_studio_quality(pil_img: Image.Image, special_edit: str = "") -> Image.Image:
     """
     Applies studio-grade contrast, sharpness, and rich color grading.
+    If special_edit has specific tint requests, applies custom color adjustments.
     """
-    img = ImageEnhance.Contrast(pil_img).enhance(1.12)
-    img = ImageEnhance.Sharpness(img).enhance(1.22)
-    img = ImageEnhance.Color(img).enhance(1.10)
+    contrast_mult = 1.15 if "high_contrast" in special_edit else 1.12
+    sharpness_mult = 1.30 if "sharp" in special_edit else 1.22
+    color_mult = 1.12 if "vibrant" in special_edit else 1.10
+    
+    img = ImageEnhance.Contrast(pil_img).enhance(contrast_mult)
+    img = ImageEnhance.Sharpness(img).enhance(sharpness_mult)
+    img = ImageEnhance.Color(img).enhance(color_mult)
     img = ImageEnhance.Brightness(img).enhance(1.02)
     return img
 
@@ -32,16 +37,9 @@ def detect_face_box(pil_img: Image.Image):
         print(f"Face detect error: {e}")
         return None
 
-def smart_face_crop(img_path: str, target_w: int, target_h: int, face_position: str = "top") -> Image.Image:
-    """
-    Smart 4:5 Framing:
-    - Avoids aggressive over-cropping (keeps natural medium portrait).
-    - For 'top': Places face comfortably in top 18-35% of canvas,
-      leaving the tummy/midriff in the lower half where the dark text scrim sits.
-    - For 'bottom': Places face in lower half (for Slide 1 bottom quadrants).
-    """
+def smart_face_crop(img_path: str, target_w: int, target_h: int, face_position: str = "top", special_edit: str = "") -> Image.Image:
     orig_img = Image.open(img_path).convert("RGB")
-    enhanced = enhance_studio_quality(orig_img)
+    enhanced = enhance_studio_quality(orig_img, special_edit)
     w, h = enhanced.size
     target_aspect = target_w / target_h # 0.8
     
@@ -96,9 +94,12 @@ def smart_face_crop(img_path: str, target_w: int, target_h: int, face_position: 
             
     return cropped.resize((target_w, target_h), Image.Resampling.LANCZOS)
 
-def build_slide1_combo_html(q_paths, headline, highlight):
+def build_slide1_combo_html(q_paths, headline, highlight, is_3d: bool = False):
     q_urls = [f"file:///{p.replace(os.sep, '/')}" for p in q_paths]
     headline_clean = headline.replace("\n", "<br>")
+    
+    shadow_style = "0 8px 32px rgba(255, 222, 67, 0.4), 0 4px 20px rgba(0,0,0,0.98)" if is_3d else "0 4px 24px rgba(0,0,0,0.98), 0 2px 6px rgba(0,0,0,0.95)"
+    badge_style = "box-shadow: 0 0 25px rgba(255, 222, 67, 0.45); transform: perspective(800px) rotateX(4deg);" if is_3d else ""
     
     return f"""<!DOCTYPE html>
 <html>
@@ -130,7 +131,7 @@ def build_slide1_combo_html(q_paths, headline, highlight):
         }}
         .cover-headline {{
             color: #FFDE43; font-size: 52px; font-weight: 800; line-height: 1.25;
-            text-shadow: 0 4px 24px rgba(0,0,0,0.98), 0 2px 6px rgba(0,0,0,0.95);
+            text-shadow: {shadow_style};
         }}
         .cover-headline span {{ color: #FFFFFF; }}
         .bottom-bar {{
@@ -140,6 +141,7 @@ def build_slide1_combo_html(q_paths, headline, highlight):
             font-size: 14px; font-weight: 800; letter-spacing: 2px; color: #FFFFFF;
             background: rgba(0,0,0,0.65); border: 1px solid rgba(255,255,255,0.25);
             padding: 8px 22px; border-radius: 9999px; text-transform: uppercase;
+            {badge_style}
         }}
     </style>
 </head>
@@ -157,9 +159,12 @@ def build_slide1_combo_html(q_paths, headline, highlight):
 </body>
 </html>"""
 
-def build_single_photo_cover_html(bg_path, headline, highlight):
+def build_single_photo_cover_html(bg_path, headline, highlight, is_3d: bool = False):
     bg_url = f"file:///{bg_path.replace(os.sep, '/')}"
     headline_clean = headline.replace("\n", "<br>")
+    
+    shadow_style = "0 8px 35px rgba(255, 222, 67, 0.45), 0 4px 20px rgba(0,0,0,0.98)" if is_3d else "0 4px 20px rgba(0,0,0,0.95), 0 2px 4px rgba(0,0,0,0.9)"
+    tag_style = "box-shadow: 0 10px 30px rgba(255, 222, 67, 0.35); transform: perspective(800px) rotateX(4deg);" if is_3d else ""
     
     return f"""<!DOCTYPE html>
 <html>
@@ -183,6 +188,7 @@ def build_single_photo_cover_html(bg_path, headline, highlight):
             padding: 10px 28px; color: #FFDE43; font-size: 15px; font-weight: 800;
             letter-spacing: 2px; text-transform: uppercase;
             box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            {tag_style}
         }}
         .bottom-scrim {{
             position: absolute; bottom: 0; left: 0; width: 1080px; height: 650px;
@@ -195,7 +201,7 @@ def build_single_photo_cover_html(bg_path, headline, highlight):
         }}
         .cover-headline {{
             color: #FFDE43; font-size: 48px; font-weight: 800; line-height: 1.25;
-            letter-spacing: -0.5px; text-shadow: 0 4px 20px rgba(0,0,0,0.95), 0 2px 4px rgba(0,0,0,0.9);
+            letter-spacing: -0.5px; text-shadow: {shadow_style};
             max-width: 960px;
         }}
         .cover-headline span {{ color: #FFFFFF; }}
@@ -217,11 +223,19 @@ def build_single_photo_cover_html(bg_path, headline, highlight):
 </body>
 </html>"""
 
-def build_glass_card_slide_html(bg_path, title, lines, icon="💡", cta=None):
+def build_glass_card_slide_html(bg_path, title, lines, icon="💡", cta=None, is_3d: bool = False):
     bg_url = f"file:///{bg_path.replace(os.sep, '/')}"
     lines_html = "".join([f'<p class="body-line">{line}</p>' for line in lines])
     cta_html = f'<div class="cta-badge">{cta}</div>' if cta else ""
     
+    card_3d_style = ""
+    if is_3d:
+        card_3d_style = """
+            transform: perspective(1000px) rotateX(2.5deg);
+            box-shadow: 0 20px 50px rgba(0,0,0,0.8), 0 0 30px rgba(255, 222, 67, 0.25);
+            border: 1.5px solid rgba(255, 222, 67, 0.5) !important;
+        """
+        
     return f"""<!DOCTYPE html>
 <html>
 <head>
@@ -247,6 +261,7 @@ def build_glass_card_slide_html(bg_path, title, lines, icon="💡", cta=None):
             background: rgba(255, 222, 67, 0.15); border: 1.5px solid rgba(255, 222, 67, 0.4);
             border-radius: 9999px; padding: 6px 20px; color: #FFDE43;
             font-size: 14px; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase;
+            {card_3d_style}
         }}
         .text-container {{
             position: absolute; bottom: 75px; left: 55px; right: 55px; z-index: 10;
@@ -282,7 +297,7 @@ def build_glass_card_slide_html(bg_path, title, lines, icon="💡", cta=None):
 </body>
 </html>"""
 
-async def render_carousel_slides(content_data: dict, image_paths: list, work_dir: str) -> list:
+async def render_carousel_slides(content_data: dict, image_paths: list, work_dir: str, is_3d: bool = False, special_edit: str = "") -> list:
     os.makedirs(work_dir, exist_ok=True)
     html_files = []
     
@@ -291,16 +306,16 @@ async def render_carousel_slides(content_data: dict, image_paths: list, work_dir
         q_paths = []
         positions = ["top", "top", "bottom", "bottom"]
         for i in range(4):
-            q_img = smart_face_crop(image_paths[i], 540, 675, positions[i])
+            q_img = smart_face_crop(image_paths[i], 540, 675, positions[i], special_edit)
             q_out = os.path.join(work_dir, f"q{i+1}.jpg")
             q_img.save(q_out, quality=95)
             q_paths.append(q_out)
-        s1_html = build_slide1_combo_html(q_paths, content_data["slide1"]["headline"], content_data["slide1"]["highlight"])
+        s1_html = build_slide1_combo_html(q_paths, content_data["slide1"]["headline"], content_data["slide1"]["highlight"], is_3d)
     else:
-        s1_img = smart_face_crop(image_paths[0], 1080, 1350, "top")
+        s1_img = smart_face_crop(image_paths[0], 1080, 1350, "top", special_edit)
         s1_bg = os.path.join(work_dir, "bg_s1.jpg")
         s1_img.save(s1_bg, quality=95)
-        s1_html = build_single_photo_cover_html(s1_bg, content_data["slide1"]["headline"], content_data["slide1"]["highlight"])
+        s1_html = build_single_photo_cover_html(s1_bg, content_data["slide1"]["headline"], content_data["slide1"]["highlight"], is_3d)
         
     s1_path = os.path.join(work_dir, "slide_1.html")
     with open(s1_path, "w", encoding="utf-8") as f:
@@ -308,19 +323,19 @@ async def render_carousel_slides(content_data: dict, image_paths: list, work_dir
     html_files.append((s1_path, os.path.join(work_dir, "slide_1.png")))
     
     # 2. Inside Slides 2 to 5 with floating icons & styling
-    icons = ["⚡", "📈", "🛡️", "🚀"]
+    icons = ["⚡", "📈", "🛡️", "🚀"] if not is_3d else ["💎", "📈", "🛡️", "🔥"]
     for s_idx, key in enumerate(["slide2", "slide3", "slide4", "slide5"]):
         slide_num = s_idx + 2
         img_src = image_paths[(s_idx + 1) % len(image_paths)]
         
-        s_img = smart_face_crop(img_src, 1080, 1350, "top")
+        s_img = smart_face_crop(img_src, 1080, 1350, "top", special_edit)
         bg_out = os.path.join(work_dir, f"bg_s{slide_num}.jpg")
         s_img.save(bg_out, quality=95)
         
         s_data = content_data[key]
         cta = s_data.get("cta") if key == "slide5" else None
         icon = icons[s_idx % len(icons)]
-        s_html = build_glass_card_slide_html(bg_out, s_data["title"], s_data["lines"], icon, cta)
+        s_html = build_glass_card_slide_html(bg_out, s_data["title"], s_data["lines"], icon, cta, is_3d)
         
         s_path = os.path.join(work_dir, f"slide_{slide_num}.html")
         with open(s_path, "w", encoding="utf-8") as f:
