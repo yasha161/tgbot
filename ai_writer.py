@@ -8,14 +8,27 @@ load_dotenv()
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
+# Optional Cloudflare AI Gateway Support for 100% Free Edge Caching & Rate Protection
+# Format: https://gateway.ai.cloudflare.com/v1/{account_id}/{gateway_id}/google-ai-studio
+CLOUDFLARE_AI_GATEWAY_URL = os.getenv("CLOUDFLARE_AI_GATEWAY_URL")
+
+def get_gemini_endpoint(model: str = "gemini-2.5-flash", action: str = "generateContent") -> str:
+    """
+    Returns Cloudflare AI Gateway endpoint if configured, else falls back to direct Google AI Studio.
+    """
+    if CLOUDFLARE_AI_GATEWAY_URL:
+        base = CLOUDFLARE_AI_GATEWAY_URL.rstrip("/")
+        return f"{base}/v1beta/models/{model}:{action}?key={GEMINI_API_KEY}"
+    return f"https://generativelanguage.googleapis.com/v1beta/models/{model}:{action}?key={GEMINI_API_KEY}"
+
 INTELLIGENCE_SYSTEM_PROMPT = """
 You are Ron, an elite AI creative partner and Instagram Carousel strategist (just like Antigravity).
 You talk in warm, smart, witty Hindi/Hinglish (e.g. "Haan bro", "Samajh gaya bilkul", "Ye tagda idea hai", "Ekdum sorted").
 
 Your job is to analyze the user's message and determine the INTENT:
 1. "CHAT": The user is just chatting, asking a question, discussing an idea, greeting, or talking.
-2. "INSTRUCTION": The user is giving a preference, rule, or guideline (e.g. "text 1 line hi rakhna", "blue tone rakhna", "heading meri hi use karna", "pet cover karna").
-3. "TRIGGER_MAKE": The user wants to start making/rendering the carousel NOW (e.g. "bana do", "make it", "shuru karo", "chalu karo", "#make", "#banao", "#render", or giving a heading with photos).
+2. "INSTRUCTION": The user is giving a preference, rule, or guideline (e.g. "text 1 line hi rakhna", "blue tone rakhna", "heading meri hi use karna", "pet cover karna", "987inst...").
+3. "TRIGGER_MAKE": The user wants to start making/rendering the carousel NOW (e.g. "312make", "bana do", "make it", "shuru karo", "#make", "#banao", "#render").
 
 Return strictly JSON with this schema:
 {
@@ -81,15 +94,10 @@ Return strictly valid JSON with this schema:
 }
 """
 
-# Per-user conversation memory
 USER_CONVERSATIONS = {}
 
 def analyze_user_message(user_id: int, user_message: str, current_context: dict) -> dict:
-    """
-    Uses Gemini intelligence to classify user intent, handle conversation,
-    and detect instructions or work triggers.
-    """
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}"
+    url = get_gemini_endpoint("gemini-2.5-flash", "generateContent")
     
     if user_id not in USER_CONVERSATIONS:
         USER_CONVERSATIONS[user_id] = []
@@ -97,7 +105,6 @@ def analyze_user_message(user_id: int, user_message: str, current_context: dict)
     
     context_note = f"\n[Context: Photos in buffer: {current_context.get('photos_count', 0)}, Active Heading: {current_context.get('active_heading')}, Active Instructions: {current_context.get('instructions')}]"
     
-    # Prompt payload
     contents = [
         {"role": "user", "parts": [{"text": INTELLIGENCE_SYSTEM_PROMPT + context_note}]},
         {"role": "model", "parts": [{"text": "Samajh gaya! Mai har user message ko analyze karke JSON me intent, friendly reply aur extracted data dunga."}]}
@@ -115,7 +122,6 @@ def analyze_user_message(user_id: int, user_message: str, current_context: dict)
         if resp.status_code == 200:
             raw_json = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
             parsed = json.loads(raw_json)
-            # Add to history
             history.append({"role": "user", "parts": [{"text": user_message}]})
             history.append({"role": "model", "parts": [{"text": parsed.get("reply", "")}]})
             return parsed
@@ -135,7 +141,7 @@ def analyze_user_message(user_id: int, user_message: str, current_context: dict)
         }
 
 def generate_carousel_content(user_heading: str, image_paths: list = None, custom_instructions: str = "") -> dict:
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}"
+    url = get_gemini_endpoint("gemini-2.5-flash", "generateContent")
     
     parts = []
     if image_paths and len(image_paths) > 0 and os.path.exists(image_paths[0]):
