@@ -20,6 +20,7 @@ ENV_FILE = os.path.join(os.path.dirname(__file__), ".env")
 load_dotenv(dotenv_path=ENV_FILE)
 
 from telegram import Update, InputMediaPhoto, InputMediaDocument
+from telegram.request import HTTPXRequest
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
@@ -214,14 +215,14 @@ async def process_carousel_job(
             caption = f"Slide {i+1} of 5" if i == 0 else None
             with open(slide_path, "rb") as f:
                 media_group.append(InputMediaPhoto(f.read(), caption=caption))
-        await context.bot.send_media_group(chat_id=chat_id, media=media_group)
+        await context.bot.send_media_group(chat_id=chat_id, media=media_group, write_timeout=120.0, read_timeout=120.0)
         
         # 2. Uncompressed PNG Documents for lossless publishing
         doc_group = []
         for i, slide_path in enumerate(png_slides):
             with open(slide_path, "rb") as f:
                 doc_group.append(InputMediaDocument(f.read(), filename=f"slide_{i+1}.png"))
-        await context.bot.send_media_group(chat_id=chat_id, media=doc_group)
+        await context.bot.send_media_group(chat_id=chat_id, media=doc_group, write_timeout=120.0, read_timeout=120.0)
         
         # Clear pending buffer after successful production
         clear_pending_photos(chat_id)
@@ -456,7 +457,13 @@ def main():
     if not TELEGRAM_BOT_TOKEN:
         raise ValueError("TELEGRAM_BOT_TOKEN is not set in environment!")
         
-    app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
+    t_request = HTTPXRequest(
+        connection_pool_size=16,
+        connect_timeout=30.0,
+        read_timeout=120.0,
+        write_timeout=120.0
+    )
+    app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).request(t_request).build()
     
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CommandHandler("status", status_command))
