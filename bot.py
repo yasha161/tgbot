@@ -44,7 +44,10 @@ from memory_store import (
     get_visual_directives,
     get_user_guidelines_str,
     update_user_guidelines,
-    reset_user_session
+    reset_user_session,
+    set_custom_script,
+    get_custom_script,
+    clear_custom_script
 )
 
 logging.basicConfig(
@@ -157,23 +160,27 @@ async def process_carousel_job(
         if force_single_photo and len(saved_images) > 1:
             saved_images = saved_images[:1]
             
-        await context.bot.edit_message_text(
-            chat_id=chat_id,
-            message_id=status_msg.message_id,
-            text=f"✍️ *Synthesizing researched 5-slide copy...*\nHeading: `{heading}`",
-            parse_mode="Markdown"
-        )
-        
         loop = asyncio.get_event_loop()
         guidelines_str = get_user_guidelines_str(chat_id)
         
-        content_data = await loop.run_in_executor(
-            None,
-            generate_carousel_content,
-            heading,
-            saved_images,
-            guidelines_str
-        )
+        custom_script = get_custom_script(chat_id)
+        if custom_script:
+            content_data = custom_script
+            clear_custom_script(chat_id)
+        else:
+            await context.bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=status_msg.message_id,
+                text=f"✍️ *Synthesizing researched 5-slide copy...*\nHeading: `{heading}`",
+                parse_mode="Markdown"
+            )
+            content_data = await loop.run_in_executor(
+                None,
+                generate_carousel_content,
+                heading,
+                saved_images,
+                guidelines_str
+            )
         
         await context.bot.edit_message_text(
             chat_id=chat_id,
@@ -321,6 +328,12 @@ async def handle_incoming_instruction_or_render(
     text_pos = directives.get("text_position", "bottom")
     text_align = directives.get("text_align", "center")
     
+    # If user says conversational prompt like "bro" / "bhai" / "banao" and we have photos & topic/script in memory
+    lower_input = text.strip().lower()
+    if lower_input in ["bro", "bhai", "banao", "make", "chalo", "render", "kya hua", "yo"]:
+        if len(pending_photos) > 0 and (get_active_heading(chat_id) or get_custom_script(chat_id)):
+            wants_render = True
+
     if wants_render or intent == "RENDER":
         if len(pending_photos) == 0:
             await update.message.reply_text(

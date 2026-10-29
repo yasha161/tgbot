@@ -26,6 +26,7 @@ def load_user_memory(user_id: int) -> dict:
                 data.setdefault("active_heading", None)
                 data.setdefault("last_topic", None)
                 data.setdefault("is_3d_mode", False)
+                data.setdefault("custom_script", None)
                 data.setdefault("visual_directives", {
                     "floating_icons": False,
                     "text_position": "bottom",
@@ -41,6 +42,7 @@ def load_user_memory(user_id: int) -> dict:
         "guidelines": [],
         "active_heading": None,
         "last_topic": None,
+        "custom_script": None,
         "is_3d_mode": False,
         "visual_directives": {
             "floating_icons": False,
@@ -109,6 +111,20 @@ def get_3d_mode(user_id: int) -> bool:
     data = load_user_memory(user_id)
     return data.get("is_3d_mode", False)
 
+def set_custom_script(user_id: int, script_dict: dict):
+    data = load_user_memory(user_id)
+    data["custom_script"] = script_dict
+    save_user_memory(user_id, data)
+
+def get_custom_script(user_id: int) -> dict:
+    data = load_user_memory(user_id)
+    return data.get("custom_script")
+
+def clear_custom_script(user_id: int):
+    data = load_user_memory(user_id)
+    data["custom_script"] = None
+    save_user_memory(user_id, data)
+
 def update_visual_directives(user_id: int, directives: dict):
     data = load_user_memory(user_id)
     vdir = data.get("visual_directives", {})
@@ -153,6 +169,7 @@ def reset_user_session(user_id: int):
     clear_pending_photos(user_id)
     data = load_user_memory(user_id)
     data["active_heading"] = None
+    data["custom_script"] = None
     data["visual_directives"] = {
         "floating_icons": False,
         "text_position": "bottom",

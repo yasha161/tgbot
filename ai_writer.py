@@ -17,7 +17,10 @@ from memory_store import (
     set_3d_mode,
     get_3d_mode,
     update_visual_directives,
-    get_visual_directives
+    get_visual_directives,
+    set_custom_script,
+    get_custom_script,
+    clear_custom_script
 )
 
 # Guarantee loading .env from bot directory
@@ -146,6 +149,35 @@ def safe_parse_json(raw_text) -> dict:
             pass
     return {}
 
+def parse_user_slides(raw: str) -> dict:
+    slides = {}
+    pattern = r'SLIDE\s*([1-5])(?:\s*[·\-\:]\s*[\w\s]+)?\n(.*?)(?=(?:SLIDE\s*[1-5]|$))'
+    matches = list(re.finditer(pattern, raw, re.DOTALL | re.IGNORECASE))
+    if len(matches) < 3:
+        return {}
+        
+    for m in matches:
+        num = int(m.group(1))
+        body = [b.strip() for b in m.group(2).strip().split('\n') if b.strip()]
+        if not body:
+            continue
+            
+        if num == 1:
+            headline = body[0]
+            highlight = body[1] if len(body) > 1 else "here is what you need to know:"
+            slides["slide1"] = {"headline": headline, "highlight": highlight}
+        elif num in [2, 3, 4]:
+            title = f"#{num-1} – {body[0]}" if not body[0].startswith("#") else body[0]
+            lines = body[1:] if len(body) > 1 else [body[0]]
+            slides[f"slide{num}"] = {"title": title, "lines": lines}
+        elif num == 5:
+            title = body[0]
+            cta = body[-1] if len(body) > 2 else "FOLLOW FOR MORE 💡"
+            lines = body[1:-1] if len(body) > 2 else (body[1:] if len(body) > 1 else [body[0]])
+            slides["slide5"] = {"title": title, "lines": lines, "cta": cta}
+            
+    return slides
+
 MASTER_UNDERSTANDING_SYSTEM_PROMPT = """
 You are Ron, an executive-level creative technologist and master Instagram Carousel art director.
 You have the high intellect, context synthesis, and perceptive power of Antigravity.
@@ -155,11 +187,12 @@ CORE COMPREHENSION CAPABILITIES:
 1. Master Multi-Turn History Synthesis:
    - When the user says "purani chat padho aur banao", "jo pehle topic bola tha uspe banao", "wahi topic continue karo", or gives an implicit reference, inspect [Recent Conversation History] carefully.
    - Extract the exact topic/heading previously discussed and lock it into `resolved_heading`.
+   - If user says "bro", "bhai", "kya hua", "chalo", "ready" and photos or topic/script are already buffered in memory, user is asking to trigger/execute! Set `wants_render: true` and `intent: "RENDER"`.
    - If user provides a new topic in current message (e.g. "topic hai: Why 90% of Traders Lose Money", or "ispe banao: ..."), lock that into `resolved_heading`.
 
 2. Natural Language Trigger Recognition (NO rigid codewords required):
    - User does NOT need to type secret codes like `312make`.
-   - Words like "banao", "bana do", "make it", "shuru karo", "render karo", "chalo start karo", "ye photo leke bana do", "banao ispe" indicate `wants_render: true` and `intent: "RENDER"`.
+   - Words like "banao", "bana do", "make it", "shuru karo", "render karo", "chalo start karo", "ye photo leke bana do", "banao ispe", "bro" indicate `wants_render: true` when photos/topic are available.
    - Words like "heading ye rakhna", "topic hai", "naya topic" indicate `intent: "SET_TOPIC"`.
    - Words like "text chhota rakhna", "pet cover karna", "face mat cover karna", "yellow color" indicate `intent: "SET_INSTRUCTION"`.
    - If user is exploring ideas, discussing finance, or asking your view, set `intent: "CHAT"`.
@@ -200,6 +233,41 @@ OUTPUT STRICTLY VALID JSON MATCHING THIS SCHEMA:
 """
 
 def analyze_user_message(user_id: int, user_message: str, current_context: dict) -> dict:
+    # 0. Check for custom user-provided slide script
+    user_slides = parse_user_slides(user_message)
+    if user_slides:
+        first_line = user_message.strip().split("\n")[0]
+        heading = first_line if "SLIDE" not in first_line.upper() else user_slides.get("slide1", {}).get("headline", "Why SIP Makes Sense")
+        set_custom_script(user_id, user_slides)
+        set_active_heading(user_id, heading)
+        photos_count = current_context.get("photos_count", 0)
+        
+        reply = f"Custom 5-slide script locked in for '{heading}'."
+        if photos_count > 0:
+            reply += f" {photos_count} photos ready. Rendering carousel now..."
+            wants_render = True
+        else:
+            reply += " Please send 1 or 4 photos to produce."
+            wants_render = False
+            
+        add_message_to_history(user_id, "user", user_message)
+        add_message_to_history(user_id, "model", reply)
+        return {
+            "intent": "RENDER" if wants_render else "SET_SCRIPT",
+            "wants_render": wants_render,
+            "needs_clarification": False,
+            "resolved_heading": heading,
+            "extracted_instruction": None,
+            "style_mode": None,
+            "photo_count_requested": None,
+            "visual_directives": {
+                "floating_icons": False,
+                "text_position": "bottom",
+                "text_align": "center"
+            },
+            "reply": reply
+        }
+
     # 1. Load memory state
     recent_history_text = get_recent_history_formatted(user_id, max_turns=20)
     saved_guidelines = get_user_guidelines_str(user_id)
