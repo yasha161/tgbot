@@ -8,16 +8,22 @@ load_dotenv()
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-COMPANION_SYSTEM_PROMPT = """
-You are Ron, an AI creative partner and carousel strategist talking to your collaborator (Yash).
-You have the exact personality of Antigravity: smart, warm, witty, supportive, highly competent, and conversational in Hindi / Hinglish.
+INTELLIGENCE_SYSTEM_PROMPT = """
+You are Ron, an elite AI creative partner and Instagram Carousel strategist (just like Antigravity).
+You talk in warm, smart, witty Hindi/Hinglish (e.g. "Haan bro", "Samajh gaya bilkul", "Ye tagda idea hai", "Ekdum sorted").
 
-Personality Guidelines:
-- Talk like a real tech-savvy creative partner (use natural phrases like "Haan bro", "Bilkul sorted hai", "Ye angle kaafi tagda hai", "Samajh gaya mai").
-- Do NOT sound robotic, repetitive, or overly formal.
-- If the user shares an idea, hook, or asks a question, discuss it with genuine insights.
-- If the user gives instructions (e.g. "heading meri hi rakhna", "short text rakhna", "ye rule yaad rakhna"), acknowledge it warmly and confirm you have locked it in memory.
-- Keep responses concise, helpful, and natural (1 to 3 short paragraphs max).
+Your job is to analyze the user's message and determine the INTENT:
+1. "CHAT": The user is just chatting, asking a question, discussing an idea, greeting, or talking.
+2. "INSTRUCTION": The user is giving a preference, rule, or guideline (e.g. "text 1 line hi rakhna", "blue tone rakhna", "heading meri hi use karna", "pet cover karna").
+3. "TRIGGER_MAKE": The user wants to start making/rendering the carousel NOW (e.g. "bana do", "make it", "shuru karo", "chalu karo", "#make", "#banao", "#render", or giving a heading with photos).
+
+Return strictly JSON with this schema:
+{
+  "intent": "CHAT" | "INSTRUCTION" | "TRIGGER_MAKE",
+  "reply": "Warm, natural Hindi/Hinglish response to the user",
+  "extracted_instruction": "The clean instruction to save, or null if none",
+  "extracted_heading": "The exact heading/topic if mentioned in this message, or null"
+}
 """
 
 CAROUSEL_SYSTEM_PROMPT = """
@@ -78,43 +84,55 @@ Return strictly valid JSON with this schema:
 # Per-user conversation memory
 USER_CONVERSATIONS = {}
 
-def chat_with_agent(user_id: int, user_message: str) -> str:
+def analyze_user_message(user_id: int, user_message: str, current_context: dict) -> dict:
     """
-    Handles friendly conversation with memory like Antigravity.
+    Uses Gemini intelligence to classify user intent, handle conversation,
+    and detect instructions or work triggers.
     """
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}"
     
     if user_id not in USER_CONVERSATIONS:
         USER_CONVERSATIONS[user_id] = []
-        
     history = USER_CONVERSATIONS[user_id]
     
-    # Append user turn
-    history.append({"role": "user", "parts": [{"text": user_message}]})
+    context_note = f"\n[Context: Photos in buffer: {current_context.get('photos_count', 0)}, Active Heading: {current_context.get('active_heading')}, Active Instructions: {current_context.get('instructions')}]"
     
-    # Keep last 10 turns to avoid token bloat
-    if len(history) > 10:
-        history = history[-10:]
-        USER_CONVERSATIONS[user_id] = history
-        
+    # Prompt payload
     contents = [
-        {"role": "user", "parts": [{"text": COMPANION_SYSTEM_PROMPT}]},
-        {"role": "model", "parts": [{"text": "Samajh gaya bro! Mai hamesha Yash ke sath friendly, smart aur conversational Hinglish me connect rahunga, aur saare creative decisions me saath dunga."}]}
-    ] + history
+        {"role": "user", "parts": [{"text": INTELLIGENCE_SYSTEM_PROMPT + context_note}]},
+        {"role": "model", "parts": [{"text": "Samajh gaya! Mai har user message ko analyze karke JSON me intent, friendly reply aur extracted data dunga."}]}
+    ] + history[-6:] + [
+        {"role": "user", "parts": [{"text": user_message}]}
+    ]
     
-    payload = {"contents": contents}
+    payload = {
+        "contents": contents,
+        "generationConfig": {"responseMimeType": "application/json"}
+    }
     
     try:
         resp = requests.post(url, json=payload, timeout=15)
         if resp.status_code == 200:
-            data = resp.json()
-            model_reply = data["candidates"][0]["content"]["parts"][0]["text"].strip()
-            history.append({"role": "model", "parts": [{"text": model_reply}]})
-            return model_reply
+            raw_json = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+            parsed = json.loads(raw_json)
+            # Add to history
+            history.append({"role": "user", "parts": [{"text": user_message}]})
+            history.append({"role": "model", "parts": [{"text": parsed.get("reply", "")}]})
+            return parsed
         else:
-            return f"Bhai ek baar wapas bolo, network thoda choke hua ({resp.status_code})."
+            return {
+                "intent": "CHAT",
+                "reply": "Bhai ek baar dobara bolo, connection thoda slow tha.",
+                "extracted_instruction": None,
+                "extracted_heading": None
+            }
     except Exception as e:
-        return f"Arre bro, thoda issue aaya: {str(e)}"
+        return {
+            "intent": "CHAT",
+            "reply": f"Bhai issue aaya: {str(e)}",
+            "extracted_instruction": None,
+            "extracted_heading": None
+        }
 
 def generate_carousel_content(user_heading: str, image_paths: list = None, custom_instructions: str = "") -> dict:
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}"

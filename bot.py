@@ -23,7 +23,7 @@ from telegram.ext import (
     filters,
 )
 
-from ai_writer import generate_carousel_content, chat_with_agent
+from ai_writer import generate_carousel_content, analyze_user_message
 from renderer import render_carousel_slides
 
 load_dotenv()
@@ -51,34 +51,27 @@ def get_session(chat_id: int):
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     welcome_text = (
         "Arre bro! Mai hoon Ron — tera AI Carousel Partner. 🤝\n\n"
-        "Hum bilkul waise hi kaam karenge jaise Antigravity ke sath karte ho — friendly, smart aur high-speed!\n\n"
-        "💬 *Normal Chat Mode*:\n"
-        "Jab tak tum special command nahi doge, mai aapse dost ki tarah baat karunga, ideas discuss karunga aur sawaalon ke jawab dunga.\n\n"
-        "⚡ *Special Commands (Work Mode)*:\n"
-        "• `#make <heading>` ya `#banao <heading>`: 4:5 studio carousel generate karega.\n"
-        "• `#inst <instruction>`: Custom instruction lock karega (e.g. *#inst text 1 line hi rakhna*).\n"
-        "• `#heading <text>`: Exact heading set karega.\n"
-        "• `#status`: Check karega kitni photos aur kya instructions save hain.\n"
-        "• `#clear`: Naye project ke liye buffer reset karega.\n\n"
-        "📸 *Quick Flow*:\n"
-        "1. Photos bhej do (1 se 4+ photos).\n"
-        "2. Likho `#make <aapka topic>` (e.g. `#make Being a daughter of a mutual fund distributor...`).\n"
-        "3. Live 5-slide carousel album + documents deliver ho jayenge! 🚀"
+        "Mujhme **Gemini 2.5 Flash** ki full intelligence loaded hai:\n\n"
+        "💬 *Smart Chat & Brain*:\n"
+        "• **Normal Baat Karo**: Kisi bhi cheez pe discuss karo, mai Antigravity ki tarah jawab dunga.\n"
+        "• **Instructions Do**: Koi bhi rule bolo (e.g. *'bhai pet cover dhyan se karna'*, *'text 1 line hi rakhna'*), mai turant samajh kar lock kar lunga.\n"
+        "• **Work Command**: Jab bhi bolo *'bana do'*, *'start karo'*, ya *'#make'*, mai instantly high-res carousel render kar dunga! 🚀\n\n"
+        "📸 **Bas photos bhej do aur baat shuru karo!**"
     )
     await update.message.reply_text(welcome_text, parse_mode="Markdown")
 
 async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     session = get_session(update.message.chat_id)
     photos_count = len(session.get("pending_photos", []))
-    heading = session.get("pending_heading") or "None (default will be used)"
+    heading = session.get("pending_heading") or "None (default wealth wisdom will be used)"
     inst = session.get("custom_instructions") or "None"
     
     status_text = (
-        f"📊 *Current Status*:\n"
+        f"📊 *Current Brain Status*:\n"
         f"• **Saved Photos**: {photos_count}\n"
         f"• **Active Heading**: `{heading}`\n"
-        f"• **Custom Instructions**: `{inst}`\n\n"
-        f"Ready to render? Bas `#make` ya `#banao` bhej do!"
+        f"• **Locked Instructions**: `{inst}`\n\n"
+        f"Ready to render? Bas bolo *'bana do'* ya *'#make'*!"
     )
     await update.message.reply_text(status_text, parse_mode="Markdown")
 
@@ -87,7 +80,7 @@ async def clear_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     session["pending_photos"] = []
     session["pending_heading"] = None
     session["custom_instructions"] = ""
-    await update.message.reply_text("🧹 Buffer cleared! Naya topic aur photos bhej sakte ho.")
+    await update.message.reply_text("🧹 Buffer & memory cleared! Naya topic aur photos bhej sakte ho.")
 
 async def process_carousel_job(chat_id, user_images, heading, context: ContextTypes.DEFAULT_TYPE):
     session = get_session(chat_id)
@@ -108,11 +101,11 @@ async def process_carousel_job(chat_id, user_images, heading, context: ContextTy
                 f.write(img_bytes)
             saved_images.append(img_path)
             
-        # Step 2: Generate 1-2 line crisp copy using exact user heading
+        # Step 2: Generate 1-2 line crisp copy using exact user heading & locked instructions
         await context.bot.edit_message_text(
             chat_id=chat_id,
             message_id=status_msg.message_id,
-            text=f"✍️ *Gemini 2.5 Flash copy likh raha hai (1-2 lines crisp)...*\nExact Heading: `{heading}`",
+            text=f"✍️ *Gemini 2.5 Flash copy likh raha hai (1-2 lines crisp)...*\nHeading: `{heading}`",
             parse_mode="Markdown"
         )
         
@@ -189,10 +182,6 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     media_group_id = msg.media_group_id
     caption = msg.caption or ""
     
-    # Check if caption contains trigger code word
-    trigger_words = ["#make", "#banao", "#render", "/make", "/banao", "/render"]
-    has_trigger = any(t in caption.lower() for t in trigger_words)
-    
     if media_group_id:
         if media_group_id not in USER_MEDIA_GROUPS:
             USER_MEDIA_GROUPS[media_group_id] = {
@@ -206,31 +195,35 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if group_data:
                 photos = group_data["photos"]
                 final_caption = group_data["caption"]
-                
-                # Add to session
                 session["pending_photos"].extend(photos)
                 count = len(session["pending_photos"])
                 
-                # Check trigger
-                caption_lower = final_caption.lower()
-                trigger_match = None
-                for t in trigger_words:
-                    if t in caption_lower:
-                        trigger_match = t
-                        break
-                        
-                if trigger_match:
-                    # Clean heading
-                    heading = final_caption.replace(trigger_match, "").strip()
-                    if not heading:
-                        heading = "Being a daughter of a mutual fund distributor, I know one thing…"
-                    await process_carousel_job(chat_id, session["pending_photos"], heading, context)
-                else:
-                    await context.bot.send_message(
-                        chat_id=chat_id,
-                        text=f"📸 *{len(photos)} photos receive ho gayi bro!* (Total: {count})\n\nAbhi normal chat on hai. Jab finalize ho jaye, bas `#make <heading>` ya `#banao <heading>` bhej dena!",
-                        parse_mode="Markdown"
+                # Analyze caption with Gemini
+                if final_caption:
+                    ctx = {
+                        "photos_count": count,
+                        "active_heading": session.get("pending_heading"),
+                        "instructions": session.get("custom_instructions")
+                    }
+                    analysis = await asyncio.get_event_loop().run_in_executor(
+                        None, analyze_user_message, chat_id, final_caption, ctx
                     )
+                    if analysis.get("intent") == "TRIGGER_MAKE":
+                        heading = analysis.get("extracted_heading") or session.get("pending_heading") or final_caption
+                        await context.bot.send_message(chat_id=chat_id, text=analysis.get("reply", "Chalo shuru karte hain! 🚀"))
+                        await process_carousel_job(chat_id, session["pending_photos"], heading, context)
+                        return
+                    elif analysis.get("intent") == "INSTRUCTION":
+                        inst = analysis.get("extracted_instruction")
+                        session["custom_instructions"] = f"{session.get('custom_instructions', '')} | {inst}".strip(" |")
+                        await context.bot.send_message(chat_id=chat_id, text=analysis.get("reply"))
+                        return
+                        
+                await context.bot.send_message(
+                    chat_id=chat_id,
+                    text=f"📸 *{len(photos)} photos mil gayi bro!* (Total: {count})\n\nKoi instruction dena ho toh batao, ya seedha bolo *'bana do'* / *'#make <heading>'*!",
+                    parse_mode="Markdown"
+                )
         else:
             USER_MEDIA_GROUPS[media_group_id]["photos"].append(photo_bytes)
             if caption:
@@ -240,83 +233,84 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         session["pending_photos"].append(photo_bytes)
         count = len(session["pending_photos"])
         
-        caption_lower = caption.lower()
-        trigger_match = None
-        for t in trigger_words:
-            if t in caption_lower:
-                trigger_match = t
-                break
-                
-        if trigger_match:
-            heading = caption.replace(trigger_match, "").strip()
-            if not heading:
-                heading = "Being a daughter of a mutual fund distributor, I know one thing…"
-            await process_carousel_job(chat_id, session["pending_photos"], heading, context)
-        else:
-            await context.bot.send_message(
-                chat_id=chat_id,
-                text=f"📸 *Photo save ho gayi!* (Total: {count} photos)\n\nJab aur photos bhejni ho bhej do. Render ke liye bas `#make <heading>` ya `#banao` bol dena!",
-                parse_mode="Markdown"
+        if caption:
+            ctx = {
+                "photos_count": count,
+                "active_heading": session.get("pending_heading"),
+                "instructions": session.get("custom_instructions")
+            }
+            analysis = await asyncio.get_event_loop().run_in_executor(
+                None, analyze_user_message, chat_id, caption, ctx
             )
+            if analysis.get("intent") == "TRIGGER_MAKE":
+                heading = analysis.get("extracted_heading") or session.get("pending_heading") or caption
+                await context.bot.send_message(chat_id=chat_id, text=analysis.get("reply", "Chalo shuru karte hain! 🚀"))
+                await process_carousel_job(chat_id, session["pending_photos"], heading, context)
+                return
+            elif analysis.get("intent") == "INSTRUCTION":
+                inst = analysis.get("extracted_instruction")
+                session["custom_instructions"] = f"{session.get('custom_instructions', '')} | {inst}".strip(" |")
+                await context.bot.send_message(chat_id=chat_id, text=analysis.get("reply"))
+                return
+                
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=f"📸 *Photo save ho gayi!* (Total: {count} photos)\n\nJab aur photos bhejni ho bhej do, ya bolo *'bana do'*!",
+            parse_mode="Markdown"
+        )
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
     chat_id = msg.chat_id
     raw_text = msg.text.strip()
-    lower_text = raw_text.lower()
     session = get_session(chat_id)
     
-    # 1. Check for #clear or /clear
-    if lower_text in ["#clear", "/clear", "clear"]:
+    # 1. Quick commands
+    if raw_text.lower() in ["/clear", "#clear", "clear"]:
         await clear_command(update, context)
         return
-        
-    # 2. Check for #status or /status
-    if lower_text in ["#status", "/status", "status"]:
+    if raw_text.lower() in ["/status", "#status", "status"]:
         await status_command(update, context)
         return
         
-    # 3. Check for #inst or /inst or instruction
-    if lower_text.startswith(("#inst", "/inst")):
-        inst_text = raw_text.split(" ", 1)[1] if " " in raw_text else ""
-        session["custom_instructions"] = f"{session.get('custom_instructions', '')} | {inst_text}".strip(" |")
-        await update.message.reply_text(f"🔒 *Instruction locked*: `{inst_text}`\n\nAgle carousels me ye dhyan rakhunga!", parse_mode="Markdown")
+    # 2. Run through Gemini 2.5 Flash intelligence
+    ctx = {
+        "photos_count": len(session.get("pending_photos", [])),
+        "active_heading": session.get("pending_heading"),
+        "instructions": session.get("custom_instructions")
+    }
+    
+    analysis = await asyncio.get_event_loop().run_in_executor(
+        None, analyze_user_message, chat_id, raw_text, ctx
+    )
+    
+    intent = analysis.get("intent", "CHAT")
+    reply = analysis.get("reply", "Haan bro!")
+    extracted_inst = analysis.get("extracted_instruction")
+    extracted_heading = analysis.get("extracted_heading")
+    
+    if extracted_heading:
+        session["pending_heading"] = extracted_heading
+        
+    if intent == "INSTRUCTION":
+        if extracted_inst:
+            session["custom_instructions"] = f"{session.get('custom_instructions', '')} | {extracted_inst}".strip(" |")
+        await update.message.reply_text(reply)
         return
         
-    # 4. Check for #heading or /heading
-    if lower_text.startswith(("#heading", "/heading")):
-        heading_text = raw_text.split(" ", 1)[1] if " " in raw_text else ""
-        session["pending_heading"] = heading_text
-        await update.message.reply_text(f"📌 *Heading locked*: `{heading_text}`\n\nAb jab bhi `#make` ya `#banao` likhoge, ye exact heading use hogi!", parse_mode="Markdown")
-        return
-
-    # 5. Check for Trigger Words: #make, #banao, #render
-    trigger_words = ["#make", "#banao", "#render", "/make", "/banao", "/render"]
-    matched_trigger = None
-    for t in trigger_words:
-        if lower_text.startswith(t) or lower_text == t:
-            matched_trigger = t
-            break
-            
-    if matched_trigger:
-        # Check if photos exist
+    elif intent == "TRIGGER_MAKE":
         if len(session["pending_photos"]) == 0:
-            await update.message.reply_text("Arre bro, heading/trigger toh mil gaya par photos nahi aayi abhi! 4 photos bhej do, fir `#make` bolna.")
+            await update.message.reply_text(f"{reply}\n\n⚠️ Lekin pehle **photos bhej do** (1 se 4 photos), fir render shuru kar dunga!")
             return
             
-        # Extract heading from command if provided
-        cmd_heading = raw_text[len(matched_trigger):].strip()
-        final_heading = cmd_heading or session.get("pending_heading") or "Being a daughter of a mutual fund distributor, I know one thing…"
-        
-        await update.message.reply_text(f"🚀 *Work Mode Triggered!*\nHeading: `{final_heading}`\n\nRender shuru kar raha hoon...", parse_mode="Markdown")
+        final_heading = extracted_heading or session.get("pending_heading") or "Being a daughter of a mutual fund distributor, I know one thing…"
+        await update.message.reply_text(reply)
         await process_carousel_job(chat_id, session["pending_photos"], final_heading, context)
         return
-
-    # 6. Default: 100% Normal Friendly Chat (Antigravity Persona)
-    reply = await asyncio.get_event_loop().run_in_executor(
-        None, chat_with_agent, chat_id, raw_text
-    )
-    await update.message.reply_text(reply)
+        
+    else:
+        # Normal chat
+        await update.message.reply_text(reply)
 
 def main():
     if not TELEGRAM_BOT_TOKEN:
@@ -330,7 +324,7 @@ def main():
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     
-    logger.info("Ron Carousel Agent (Special Commands Mode) is live on Telegram! Waiting for messages...")
+    logger.info("Ron Carousel Agent (Full Gemini Intelligence) is live on Telegram! Waiting for messages...")
     app.run_polling()
 
 if __name__ == "__main__":
