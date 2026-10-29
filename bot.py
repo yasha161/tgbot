@@ -6,7 +6,6 @@ import tempfile
 import logging
 from dotenv import load_dotenv
 
-# Ensure UTF-8 output on Windows consoles
 if sys.platform == "win32":
     try:
         sys.stdout.reconfigure(encoding="utf-8")
@@ -74,17 +73,17 @@ def get_session(chat_id: int):
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     welcome_text = (
-        "Arre Yash bhai! Mai hoon Ron — tera AI Carousel Partner. 🤝\n\n"
-        "⚡ *Special Secret Trigger Codes*:\n"
-        "• `312make <heading>`: Instant carousel render trigger (100% precision).\n"
-        "• `312make #3d <heading>`: **3D Elements Mode** (Floating 3D metallic badges, glass cards & deep gold glow).\n"
-        "• `987inst <instruction>`: Custom instruction lock karega (e.g. *987inst pet dhyan se cover karna*).\n"
-        "• `456head <heading>`: Exact heading lock karega bina render kiye.\n"
-        "• `789style 3d`: 3D mode on/off toggle karega.\n"
-        "• `000status`: Memory aur photos check karega.\n"
-        "• `111reset`: Sab clear karega.\n\n"
-        "💾 *Memory Tags*: Photo ke caption me `#save bank` likho, future me bas `@bank` likh kar bula lo!\n\n"
-        "Batao bhai, kya instruction ya topic hai?"
+        "**Ron — Creative Art Director & Carousel Engine**\n\n"
+        "Ready to produce high-retention 4:5 Instagram Carousels (1080×1350).\n\n"
+        "**Core Commands**:\n"
+        "• `312make <heading>`: Trigger render directly.\n"
+        "• `312make #3d <heading>`: Render with 3D luxury elements.\n"
+        "• `987inst <guideline>`: Lock aesthetic or structural rules into memory.\n"
+        "• `456head <heading>`: Set heading without triggering render.\n"
+        "• `000status`: Review active buffer and locked guidelines.\n"
+        "• `111reset`: Clear current session.\n\n"
+        "**Asset Memory**: Send photos with `#save <tag>` (e.g. `#save bank`), and reference them anytime with `@tag`.\n\n"
+        "You can chat naturally, discuss hooks, or command renders at any time."
     )
     await update.message.reply_text(welcome_text, parse_mode="Markdown")
 
@@ -96,16 +95,15 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     tags_str = ", ".join([f"`@{t}`" for t in saved_tags]) if saved_tags else "None"
     heading = session.get("pending_heading") or "None"
     inst = session.get("custom_instructions") or "None"
-    mode = "3D Luxury Mode 💎" if session.get("is_3d_mode") else "Standard Clean Studio 📸"
+    mode = "3D Luxury Mode 💎" if session.get("is_3d_mode") else "Standard Studio 📸"
     
     status_text = (
-        f"📊 *Ron Brain Status*:\n"
-        f"• **Buffer Photos**: {photos_count}\n"
+        f"**Session Overview**:\n"
+        f"• **Buffered Photos**: {photos_count}\n"
         f"• **Saved Memory Tags**: {tags_str}\n"
         f"• **Active Heading**: `{heading}`\n"
-        f"• **Locked Instructions**: `{inst}`\n"
-        f"• **Visual Style**: `{mode}`\n\n"
-        f"Render karne ke liye bas likho `312make` ya `#make`!"
+        f"• **Locked Guidelines**: `{inst}`\n"
+        f"• **Visual Mode**: `{mode}`"
     )
     await update.message.reply_text(status_text, parse_mode="Markdown")
 
@@ -116,14 +114,15 @@ async def clear_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     session["custom_instructions"] = ""
     session["is_3d_mode"] = False
     session["special_edit"] = ""
-    await update.message.reply_text("🧹 Buffer & styling reset! Naya topic aur photos bhej sakte ho.")
+    await update.message.reply_text("Session reset. Ready for new assets and topic.")
 
 async def process_carousel_job(chat_id, user_images, heading, is_3d: bool, context: ContextTypes.DEFAULT_TYPE):
     session = get_session(chat_id)
-    style_label = "3D Luxury Mode (Floating Badges & Gold Glow)" if is_3d else "Standard Clean Studio"
+    style_label = "3D Luxury Elements" if is_3d else "Standard Studio"
+    
     status_msg = await context.bot.send_message(
         chat_id=chat_id,
-        text=f"⏳ *Photos process ho rahi hain... [{style_label}] shuru!*",
+        text=f"⏳ *Processing {len(user_images)} asset(s) with {style_label}...*",
         parse_mode="Markdown"
     )
     
@@ -143,7 +142,7 @@ async def process_carousel_job(chat_id, user_images, heading, is_3d: bool, conte
         await context.bot.edit_message_text(
             chat_id=chat_id,
             message_id=status_msg.message_id,
-            text=f"✍️ *Gemini 2.5 Flash copy likh raha hai (1-2 lines crisp)...*\nHeading: `{heading}`",
+            text=f"✍️ *Synthesizing 5-slide editorial copy...*\nHeading: `{heading}`",
             parse_mode="Markdown"
         )
         
@@ -159,16 +158,18 @@ async def process_carousel_job(chat_id, user_images, heading, is_3d: bool, conte
         await context.bot.edit_message_text(
             chat_id=chat_id,
             message_id=status_msg.message_id,
-            text="🎨 *Playwright 5 slides render kar raha hai (Face Safe + Strategic Midriff Cover)...*",
+            text="🎨 *Rendering 1080×1350 canvas with Playwright (Face-Safe & Balanced Framing)...*",
             parse_mode="Markdown"
         )
         
-        png_slides = await render_carousel_slides(content_data, saved_images, work_dir, is_3d, session.get("special_edit", ""))
+        png_slides = await render_carousel_slides(
+            content_data, saved_images, work_dir, is_3d, session.get("special_edit", "")
+        )
         
         await context.bot.edit_message_text(
             chat_id=chat_id,
             message_id=status_msg.message_id,
-            text="🚀 *Slides ready! Telegram album me upload kar raha hoon...*",
+            text="🚀 *Uploading high-resolution carousel album...*",
             parse_mode="Markdown"
         )
         
@@ -191,15 +192,15 @@ async def process_carousel_job(chat_id, user_images, heading, is_3d: bool, conte
         
         await context.bot.send_message(
             chat_id=chat_id,
-            text="✅ *Bhai carousel ready hai!* Check karo aur batao kaisa laga. Instagram par post karne ke liye 100% compliant hai! 📌",
+            text="✅ **Carousel rendered successfully.** All 5 slides delivered above.",
             parse_mode="Markdown"
         )
         
     except Exception as e:
-        logger.error(f"Error during carousel creation: {e}", exc_info=True)
+        logger.error(f"Render pipeline error: {e}", exc_info=True)
         await context.bot.send_message(
             chat_id=chat_id,
-            text=f"❌ Arre bro, render me issue aaya: {str(e)}"
+            text=f"⚠️ Pipeline notice: {str(e)}"
         )
     finally:
         shutil.rmtree(work_dir, ignore_errors=True)
@@ -217,16 +218,15 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     caption = (msg.caption or "").strip()
     caption_lower = caption.lower()
     
-    # Check save tag
+    # Save tag
     if "#save" in caption_lower or "save as" in caption_lower or caption_lower.startswith("save "):
         parts = caption.replace("#save", "").replace("save as", "").replace("save", "").strip().split()
         if parts:
             save_tag = parts[0]
             saved_name = save_user_asset(chat_id, save_tag, photo_bytes)
-            await msg.reply_text(f"💾 *Photo saved as `@{saved_name}`!* 📸\n\nAb future me bas `@{saved_name}` likh dena, mai memory se le lunga!")
+            await msg.reply_text(f"Asset registered as `@{saved_name}`. Available for future compositions.")
             return
 
-    # Check 312make trigger in caption
     is_3d = ("#3d" in caption_lower) or ("3d" in caption_lower) or session.get("is_3d_mode", False)
     has_make_trigger = ("312make" in caption_lower) or ("#make" in caption_lower) or ("#banao" in caption_lower)
     
@@ -257,8 +257,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 else:
                     await context.bot.send_message(
                         chat_id=chat_id,
-                        text=f"📸 *{len(photos)} photos receive ho gayi bhai!* (Total: {count})\n\nJab render karna ho, bas likho `312make <heading>` ya normal baat karo!",
-                        parse_mode="Markdown"
+                        text=f"Received {len(photos)} photos (Total buffered: {count}). Send heading with `312make <heading>` when ready to render."
                     )
         else:
             USER_MEDIA_GROUPS[media_group_id]["photos"].append(photo_bytes)
@@ -276,8 +275,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             await context.bot.send_message(
                 chat_id=chat_id,
-                text=f"📸 *Photo save ho gayi!* (Total: {count} photo)\n\nJab banana ho, bas `312make <heading>` likh dena!",
-                parse_mode="Markdown"
+                text=f"Photo buffered (Total: {count}). Ready to render on `312make <heading>`."
             )
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -287,77 +285,75 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lower_text = raw_text.lower()
     session = get_session(chat_id)
     
-    # 1. Secret Reset Code: 111reset or /clear
+    # 1. Reset
     if lower_text in ["111reset", "/clear", "#clear", "clear"]:
         await clear_command(update, context)
         return
         
-    # 2. Secret Status Code: 000status or /status
+    # 2. Status
     if lower_text in ["000status", "/status", "#status", "status"]:
         await status_command(update, context)
         return
         
-    # 3. Assets list: /assets
+    # 3. Assets
     if lower_text in ["/assets", "#assets", "assets"]:
         tags = list_user_assets(chat_id)
         tags_str = ", ".join([f"`@{t}`" for t in tags]) if tags else "None"
-        await update.message.reply_text(f"📁 *Saved Memory Tags*: {tags_str}\n\nPrompt me `@tag` likhoge toh mai direct use kar lunga!")
+        await update.message.reply_text(f"Saved memory assets: {tags_str}")
         return
 
-    # 4. Secret Instruction Code: 987inst <instruction>
+    # 4. Instruction Code: 987inst
     if lower_text.startswith("987inst") or lower_text.startswith(("#inst", "/inst")):
         inst_text = raw_text.replace("987inst", "").replace("#inst", "").replace("/inst", "").strip()
         session["custom_instructions"] = f"{session.get('custom_instructions', '')} | {inst_text}".strip(" |")
-        await update.message.reply_text(f"🔒 *Instruction Locked [987inst]*: `{inst_text}`\n\nAgle carousels me ye strictly apply hoga!", parse_mode="Markdown")
+        await update.message.reply_text(f"Guideline locked: `{inst_text}`. Applied to all compositions.")
         return
 
-    # 5. Secret Heading Code: 456head <heading>
+    # 5. Heading Code: 456head
     if lower_text.startswith("456head") or lower_text.startswith(("#heading", "/heading")):
         head_text = raw_text.replace("456head", "").replace("#heading", "").replace("/heading", "").strip()
         session["pending_heading"] = head_text
-        await update.message.reply_text(f"📌 *Heading Locked [456head]*: `{head_text}`\n\nAb jab bhi `312make` likhoge, ye exact heading use hogi!", parse_mode="Markdown")
+        await update.message.reply_text(f"Heading set: `{head_text}`.")
         return
 
-    # 6. Secret Style Code: 789style 3d / #3d
-    if lower_text.startswith("789style") or lower_text in ["#3d", "3d mode", "special edit"]:
+    # 6. Style Code: 789style
+    if lower_text.startswith("789style") or lower_text in ["#3d", "3d mode"]:
         if "3d" in lower_text:
             session["is_3d_mode"] = True
-            await update.message.reply_text("💎 *3D Luxury Style Activated [789style]*!\nFloating metallic badges, 3D perspective glass cards aur deep gold glow use honge.")
+            await update.message.reply_text("3D Luxury Elements mode activated.")
         else:
             session["is_3d_mode"] = False
-            await update.message.reply_text("📸 *Standard Studio Style Set*!")
+            await update.message.reply_text("Standard clean studio mode active.")
         return
 
-    # Check for saved asset codewords in text (@bank, @uncle)
+    # Resolve @tags from text
     resolved_paths = resolve_assets_from_text(chat_id, raw_text)
     if resolved_paths:
         for p in resolved_paths:
             if p not in session["pending_photos"]:
                 session["pending_photos"].append(p)
 
-    # 7. Secret Trigger Make Code: 312make [heading]
+    # 7. Trigger Code: 312make
     is_312make = lower_text.startswith("312make") or lower_text.startswith(("#make", "#banao", "/make", "/banao"))
     
     if is_312make:
         photos = session.get("pending_photos", [])
         if len(photos) == 0:
-            await update.message.reply_text("⚠️ Bhai photos nahi aayi abhi! 1 se 4 photos bhej do (ya saved memory tag jaise `@bank` likho), fir `312make` bolo.")
+            await update.message.reply_text("No photos buffered. Please upload photos or tag saved assets (e.g. `@bank`) to render.")
             return
             
         is_3d = ("#3d" in lower_text) or ("3d" in lower_text) or session.get("is_3d_mode", False)
         
-        # Clean heading
         heading = raw_text
         for prefix in ["312make", "#make", "#banao", "/make", "/banao", "#3d"]:
             heading = heading.replace(prefix, "")
         heading = heading.strip() or session.get("pending_heading") or "Being a daughter of a mutual fund distributor, I know one thing…"
         
-        mode_text = "💎 3D Luxury Elements" if is_3d else "📸 Standard Studio"
-        await update.message.reply_text(f"🚀 *Work Triggered [312make]*\nHeading: `{heading}`\nStyle: `{mode_text}`\n\nRender shuru ho raha hai...", parse_mode="Markdown")
+        await update.message.reply_text(f"Triggering render for: `{heading}`")
         await process_carousel_job(chat_id, photos, heading, is_3d, context)
         return
 
-    # 8. Otherwise: 100% Normal Friendly Chat (Gemini 2.5 Flash Brain)
+    # 8. Intelligent Conversation & Intent Classifier with Memory Context
     ctx = {
         "photos_count": len(session.get("pending_photos", [])),
         "active_heading": session.get("pending_heading"),
@@ -369,7 +365,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     
     intent = analysis.get("intent", "CHAT")
-    reply = analysis.get("reply", "Haan bhai!")
+    reply = analysis.get("reply", "Understood.")
     extracted_inst = analysis.get("extracted_instruction")
     extracted_heading = analysis.get("extracted_heading")
     
@@ -381,16 +377,20 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             session["custom_instructions"] = f"{session.get('custom_instructions', '')} | {extracted_inst}".strip(" |")
         await update.message.reply_text(reply)
         return
+        
     elif intent == "TRIGGER_MAKE":
         photos = session.get("pending_photos", [])
         if len(photos) == 0:
-            await update.message.reply_text(f"{reply}\n\n⚠️ Lekin pehle **photo bhej do**, fir turant bana dunga!")
+            await update.message.reply_text(f"{reply}\n\nPlease attach photos or reference saved tags to proceed.")
             return
+            
         final_heading = extracted_heading or session.get("pending_heading") or "Being a daughter of a mutual fund distributor, I know one thing…"
         await update.message.reply_text(reply)
         await process_carousel_job(chat_id, photos, final_heading, session.get("is_3d_mode", False), context)
         return
+        
     else:
+        # Professional conversational answer
         await update.message.reply_text(reply)
 
 def main():
@@ -406,7 +406,7 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     
     threading.Thread(target=run_health_server, daemon=True).start()
-    logger.info("Ron Carousel Agent (Secret Codes + 3D Mode) is live on Telegram! Waiting for messages...")
+    logger.info("Ron Carousel Agent (Executive Caliber) is live on Telegram! Waiting for messages...")
     app.run_polling()
 
 if __name__ == "__main__":
