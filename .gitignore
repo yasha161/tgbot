@@ -6,3 +6,5 @@ __pycache__/
 .venv/
 temp/
 *.log
+chat_memory/
+saved_assets/

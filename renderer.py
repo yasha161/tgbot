@@ -9,7 +9,6 @@ face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_fronta
 def enhance_studio_quality(pil_img: Image.Image, special_edit: str = "") -> Image.Image:
     """
     Applies studio-grade contrast, sharpness, and rich color grading.
-    If special_edit has specific tint requests, applies custom color adjustments.
     """
     contrast_mult = 1.15 if "high_contrast" in special_edit else 1.12
     sharpness_mult = 1.30 if "sharp" in special_edit else 1.22
@@ -94,12 +93,27 @@ def smart_face_crop(img_path: str, target_w: int, target_h: int, face_position: 
             
     return cropped.resize((target_w, target_h), Image.Resampling.LANCZOS)
 
-def build_slide1_combo_html(q_paths, headline, highlight, is_3d: bool = False):
+def build_slide1_combo_html(q_paths, headline, highlight, is_3d: bool = False, floating_icons: bool = False, text_position: str = "bottom", text_align: str = "center"):
     q_urls = [f"file:///{p.replace(os.sep, '/')}" for p in q_paths]
     headline_clean = headline.replace("\n", "<br>")
     
     shadow_style = "0 8px 32px rgba(255, 222, 67, 0.4), 0 4px 20px rgba(0,0,0,0.98)" if is_3d else "0 4px 24px rgba(0,0,0,0.98), 0 2px 6px rgba(0,0,0,0.95)"
     badge_style = "box-shadow: 0 0 25px rgba(255, 222, 67, 0.45); transform: perspective(800px) rotateX(4deg);" if is_3d else ""
+    
+    floating_icon_html = ""
+    if floating_icons:
+        floating_icon_html = """
+        <div style="position: absolute; top: 38px; left: 50%; transform: translateX(-50%); z-index: 20;
+                    background: rgba(10, 16, 26, 0.85); backdrop-filter: blur(14px);
+                    border: 1.5px solid rgba(255, 222, 67, 0.6); border-radius: 9999px;
+                    padding: 8px 24px; color: #FFDE43; font-size: 14px; font-weight: 800;
+                    letter-spacing: 2px; text-transform: uppercase;
+                    box-shadow: 0 8px 25px rgba(0,0,0,0.8), 0 0 20px rgba(255, 222, 67, 0.35);">
+            💎 4-PART WEALTH PLAYBOOK
+        </div>
+        """
+        
+    align_style = "text-align: left; align-items: flex-start; padding-left: 55px;" if text_align == "left" else "text-align: center; align-items: center;"
     
     return f"""<!DOCTYPE html>
 <html>
@@ -124,10 +138,10 @@ def build_slide1_combo_html(q_paths, headline, highlight, is_3d: bool = False):
         .q4 {{ background-image: url('{q_urls[3] if len(q_urls) > 3 else q_urls[0]}'); }}
         .center-band {{
             position: absolute; top: 50%; left: 0; right: 0; transform: translateY(-50%);
-            height: 330px;
-            background: linear-gradient(to bottom, rgba(5,8,14,0) 0%, rgba(5,8,14,0.72) 18%, rgba(5,8,14,0.92) 50%, rgba(5,8,14,0.72) 82%, rgba(5,8,14,0) 100%);
-            z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center;
-            padding: 0 40px; text-align: center;
+            height: 340px;
+            background: linear-gradient(to bottom, rgba(5,8,14,0) 0%, rgba(5,8,14,0.78) 18%, rgba(5,8,14,0.94) 50%, rgba(5,8,14,0.78) 82%, rgba(5,8,14,0) 100%);
+            z-index: 10; display: flex; flex-direction: column; justify-content: center;
+            padding: 0 40px; {align_style}
         }}
         .cover-headline {{
             color: #FFDE43; font-size: 52px; font-weight: 800; line-height: 1.25;
@@ -146,6 +160,7 @@ def build_slide1_combo_html(q_paths, headline, highlight, is_3d: bool = False):
     </style>
 </head>
 <body>
+    {floating_icon_html}
     <div class="grid-container">
         <div class="quadrant q1"></div><div class="quadrant q2"></div>
         <div class="quadrant q3"></div><div class="quadrant q4"></div>
@@ -159,13 +174,41 @@ def build_slide1_combo_html(q_paths, headline, highlight, is_3d: bool = False):
 </body>
 </html>"""
 
-def build_single_photo_cover_html(bg_path, headline, highlight, is_3d: bool = False):
+def build_single_photo_cover_html(bg_path, headline, highlight, is_3d: bool = False, floating_icons: bool = False, text_position: str = "bottom", text_align: str = "center"):
     bg_url = f"file:///{bg_path.replace(os.sep, '/')}"
     headline_clean = headline.replace("\n", "<br>")
     
     shadow_style = "0 8px 35px rgba(255, 222, 67, 0.45), 0 4px 20px rgba(0,0,0,0.98)" if is_3d else "0 4px 20px rgba(0,0,0,0.95), 0 2px 4px rgba(0,0,0,0.9)"
     tag_style = "box-shadow: 0 10px 30px rgba(255, 222, 67, 0.35); transform: perspective(800px) rotateX(4deg);" if is_3d else ""
     
+    floating_icon_badge = "💎 REAL WEALTH WISDOM" if not floating_icons else "📈 PRO RESEARCH BREAKDOWN"
+    
+    # Text position and scrim configuration
+    if text_position == "center":
+        scrim_css = """
+            position: absolute; inset: 0;
+            background: radial-gradient(circle at center, rgba(5,8,14,0.90) 0%, rgba(5,8,14,0.75) 55%, rgba(5,8,14,0.35) 100%);
+            z-index: 5; pointer-events: none;
+        """
+        container_pos = "top: 50%; transform: translateY(-50%); bottom: auto;"
+    elif text_position == "top":
+        scrim_css = """
+            position: absolute; top: 0; left: 0; width: 1080px; height: 650px;
+            background: linear-gradient(to bottom, rgba(5,8,14,0.99) 0%, rgba(5,8,14,0.92) 50%, rgba(5,8,14,0.55) 80%, rgba(5,8,14,0) 100%);
+            z-index: 5; pointer-events: none;
+        """
+        container_pos = "top: 75px; bottom: auto;"
+    else:
+        # Default bottom (safely covers midriff and preserves face at top 30%)
+        scrim_css = """
+            position: absolute; bottom: 0; left: 0; width: 1080px; height: 680px;
+            background: linear-gradient(to top, rgba(5,8,14,0.99) 0%, rgba(5,8,14,0.92) 50%, rgba(5,8,14,0.55) 80%, rgba(5,8,14,0) 100%);
+            z-index: 5; pointer-events: none;
+        """
+        container_pos = "bottom: 75px; top: auto;"
+        
+    align_css = "text-align: left; align-items: flex-start; border-left: 4px solid #FFDE43; padding-left: 24px;" if text_align == "left" else "text-align: center; align-items: center;"
+
     return f"""<!DOCTYPE html>
 <html>
 <head>
@@ -182,7 +225,7 @@ def build_single_photo_cover_html(bg_path, headline, highlight, is_3d: bool = Fa
             background-size: cover; background-position: center top; z-index: 1;
         }}
         .floating-tag {{
-            position: absolute; top: 60px; left: 50%; transform: translateX(-50%);
+            position: absolute; top: 55px; left: 50%; transform: translateX(-50%);
             z-index: 10; background: rgba(0, 0, 0, 0.65); backdrop-filter: blur(10px);
             border: 1px solid rgba(255, 222, 67, 0.4); border-radius: 9999px;
             padding: 10px 28px; color: #FFDE43; font-size: 15px; font-weight: 800;
@@ -190,14 +233,13 @@ def build_single_photo_cover_html(bg_path, headline, highlight, is_3d: bool = Fa
             box-shadow: 0 4px 20px rgba(0,0,0,0.5);
             {tag_style}
         }}
-        .bottom-scrim {{
-            position: absolute; bottom: 0; left: 0; width: 1080px; height: 650px;
-            background: linear-gradient(to top, rgba(5,8,14,0.99) 0%, rgba(5,8,14,0.92) 50%, rgba(5,8,14,0.55) 80%, rgba(5,8,14,0) 100%);
-            z-index: 5; pointer-events: none;
+        .scrim-layer {{
+            {scrim_css}
         }}
         .text-container {{
-            position: absolute; bottom: 80px; left: 55px; right: 55px; z-index: 10;
-            text-align: center; display: flex; flex-direction: column; align-items: center; gap: 20px;
+            position: absolute; {container_pos} left: 55px; right: 55px; z-index: 10;
+            display: flex; flex-direction: column; gap: 20px;
+            {align_css}
         }}
         .cover-headline {{
             color: #FFDE43; font-size: 48px; font-weight: 800; line-height: 1.25;
@@ -214,8 +256,8 @@ def build_single_photo_cover_html(bg_path, headline, highlight, is_3d: bool = Fa
 </head>
 <body>
     <div class="photo-layer"></div>
-    <div class="floating-tag">💡 REAL WEALTH WISDOM</div>
-    <div class="bottom-scrim"></div>
+    <div class="floating-tag">{floating_icon_badge}</div>
+    <div class="scrim-layer"></div>
     <div class="text-container">
         <h1 class="cover-headline">{headline_clean}<br><span>{highlight}</span></h1>
         <div class="swipe-badge">SWIPE TO READ ➔</div>
@@ -223,19 +265,44 @@ def build_single_photo_cover_html(bg_path, headline, highlight, is_3d: bool = Fa
 </body>
 </html>"""
 
-def build_glass_card_slide_html(bg_path, title, lines, icon="💡", cta=None, is_3d: bool = False):
+def build_glass_card_slide_html(bg_path, title, lines, icon="💡", cta=None, is_3d: bool = False, floating_icons: bool = False, text_position: str = "bottom", text_align: str = "center"):
     bg_url = f"file:///{bg_path.replace(os.sep, '/')}"
     lines_html = "".join([f'<p class="body-line">{line}</p>' for line in lines])
     cta_html = f'<div class="cta-badge">{cta}</div>' if cta else ""
     
     card_3d_style = ""
-    if is_3d:
+    if is_3d or floating_icons:
         card_3d_style = """
-            transform: perspective(1000px) rotateX(2.5deg);
-            box-shadow: 0 20px 50px rgba(0,0,0,0.8), 0 0 30px rgba(255, 222, 67, 0.25);
-            border: 1.5px solid rgba(255, 222, 67, 0.5) !important;
+            transform: perspective(1000px) rotateX(3deg);
+            box-shadow: 0 20px 50px rgba(0,0,0,0.85), 0 0 35px rgba(255, 222, 67, 0.35);
+            border: 1.5px solid rgba(255, 222, 67, 0.6) !important;
         """
         
+    # Text position and scrim configuration
+    if text_position == "center":
+        scrim_css = """
+            position: absolute; inset: 0;
+            background: radial-gradient(circle at center, rgba(5,8,14,0.92) 0%, rgba(5,8,14,0.78) 60%, rgba(5,8,14,0.40) 100%);
+            z-index: 5; pointer-events: none;
+        """
+        container_pos = "top: 50%; transform: translateY(-50%); bottom: auto;"
+    elif text_position == "top":
+        scrim_css = """
+            position: absolute; top: 0; left: 0; width: 1080px; height: 650px;
+            background: linear-gradient(to bottom, rgba(5,8,14,0.99) 0%, rgba(5,8,14,0.90) 50%, rgba(5,8,14,0.55) 78%, rgba(5,8,14,0) 100%);
+            z-index: 5; pointer-events: none;
+        """
+        container_pos = "top: 75px; bottom: auto;"
+    else:
+        scrim_css = """
+            position: absolute; bottom: 0; left: 0; width: 1080px; height: 650px;
+            background: linear-gradient(to top, rgba(5,8,14,0.99) 0%, rgba(5,8,14,0.90) 50%, rgba(5,8,14,0.55) 78%, rgba(5,8,14,0) 100%);
+            z-index: 5; pointer-events: none;
+        """
+        container_pos = "bottom: 75px; top: auto;"
+        
+    align_css = "text-align: left; align-items: flex-start; border-left: 4px solid #FFDE43; padding-left: 24px;" if text_align == "left" else "text-align: center; align-items: center;"
+    
     return f"""<!DOCTYPE html>
 <html>
 <head>
@@ -251,10 +318,8 @@ def build_glass_card_slide_html(bg_path, title, lines, icon="💡", cta=None, is
             position: absolute; inset: 0; background-image: url('{bg_url}');
             background-size: cover; background-position: center top; z-index: 1;
         }}
-        .bottom-scrim {{
-            position: absolute; bottom: 0; left: 0; width: 1080px; height: 620px;
-            background: linear-gradient(to top, rgba(5,8,14,0.99) 0%, rgba(5,8,14,0.90) 50%, rgba(5,8,14,0.55) 78%, rgba(5,8,14,0) 100%);
-            z-index: 5; pointer-events: none;
+        .scrim-layer {{
+            {scrim_css}
         }}
         .floating-pill {{
             display: inline-flex; align-items: center; gap: 8px;
@@ -264,8 +329,9 @@ def build_glass_card_slide_html(bg_path, title, lines, icon="💡", cta=None, is
             {card_3d_style}
         }}
         .text-container {{
-            position: absolute; bottom: 75px; left: 55px; right: 55px; z-index: 10;
-            text-align: center; display: flex; flex-direction: column; align-items: center; gap: 16px;
+            position: absolute; {container_pos} left: 55px; right: 55px; z-index: 10;
+            display: flex; flex-direction: column; gap: 16px;
+            {align_css}
         }}
         .headline {{
             color: #FFDE43; font-size: 44px; font-weight: 800; line-height: 1.25;
@@ -287,7 +353,7 @@ def build_glass_card_slide_html(bg_path, title, lines, icon="💡", cta=None, is
 </head>
 <body>
     <div class="photo-layer"></div>
-    <div class="bottom-scrim"></div>
+    <div class="scrim-layer"></div>
     <div class="text-container">
         <div class="floating-pill">{icon} INSIGHT</div>
         <h2 class="headline">{title}</h2>
@@ -297,12 +363,24 @@ def build_glass_card_slide_html(bg_path, title, lines, icon="💡", cta=None, is
 </body>
 </html>"""
 
-async def render_carousel_slides(content_data: dict, image_paths: list, work_dir: str, is_3d: bool = False, special_edit: str = "") -> list:
+async def render_carousel_slides(
+    content_data: dict,
+    image_paths: list,
+    work_dir: str,
+    is_3d: bool = False,
+    special_edit: str = "",
+    force_single_photo: bool = False,
+    floating_icons: bool = False,
+    text_position: str = "bottom",
+    text_align: str = "center"
+) -> list:
     os.makedirs(work_dir, exist_ok=True)
     html_files = []
     
-    # 1. Slide 1 (4-photo combo if 4+ images, else polished single photo hero cover)
-    if len(image_paths) >= 4:
+    # 1. Slide 1 Cover selection
+    use_combo = (len(image_paths) >= 4) and not force_single_photo
+    
+    if use_combo:
         q_paths = []
         positions = ["top", "top", "bottom", "bottom"]
         for i in range(4):
@@ -310,12 +388,29 @@ async def render_carousel_slides(content_data: dict, image_paths: list, work_dir
             q_out = os.path.join(work_dir, f"q{i+1}.jpg")
             q_img.save(q_out, quality=95)
             q_paths.append(q_out)
-        s1_html = build_slide1_combo_html(q_paths, content_data["slide1"]["headline"], content_data["slide1"]["highlight"], is_3d)
+        s1_html = build_slide1_combo_html(
+            q_paths,
+            content_data["slide1"]["headline"],
+            content_data["slide1"]["highlight"],
+            is_3d,
+            floating_icons,
+            text_position,
+            text_align
+        )
     else:
+        # Single photo hero cover (Face in top 30%, scrim + text covering stomach)
         s1_img = smart_face_crop(image_paths[0], 1080, 1350, "top", special_edit)
         s1_bg = os.path.join(work_dir, "bg_s1.jpg")
         s1_img.save(s1_bg, quality=95)
-        s1_html = build_single_photo_cover_html(s1_bg, content_data["slide1"]["headline"], content_data["slide1"]["highlight"], is_3d)
+        s1_html = build_single_photo_cover_html(
+            s1_bg,
+            content_data["slide1"]["headline"],
+            content_data["slide1"]["highlight"],
+            is_3d,
+            floating_icons,
+            text_position,
+            text_align
+        )
         
     s1_path = os.path.join(work_dir, "slide_1.html")
     with open(s1_path, "w", encoding="utf-8") as f:
@@ -335,14 +430,24 @@ async def render_carousel_slides(content_data: dict, image_paths: list, work_dir
         s_data = content_data[key]
         cta = s_data.get("cta") if key == "slide5" else None
         icon = icons[s_idx % len(icons)]
-        s_html = build_glass_card_slide_html(bg_out, s_data["title"], s_data["lines"], icon, cta, is_3d)
+        s_html = build_glass_card_slide_html(
+            bg_out,
+            s_data["title"],
+            s_data["lines"],
+            icon,
+            cta,
+            is_3d,
+            floating_icons,
+            text_position,
+            text_align
+        )
         
         s_path = os.path.join(work_dir, f"slide_{slide_num}.html")
         with open(s_path, "w", encoding="utf-8") as f:
             f.write(s_html)
         html_files.append((s_path, os.path.join(work_dir, f"slide_{slide_num}.png")))
         
-    # 3. Render all 5 with Playwright
+    # 3. Render all 5 slides with Playwright
     png_outputs = []
     async with async_playwright() as p:
         try:
