@@ -35,6 +35,27 @@ logger = logging.getLogger(__name__)
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
+
+class HealthHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"Ron Carousel Agent is alive!")
+    def log_message(self, format, *args):
+        pass
+
+def run_health_server():
+    port = int(os.getenv("PORT", 8080))
+    try:
+        server = HTTPServer(("0.0.0.0", port), HealthHandler)
+        logger.info(f"Render health-check server listening on port {port}")
+        server.serve_forever()
+    except Exception as e:
+        logger.error(f"Health server error: {e}")
+
+
 # Store user state across chats
 USER_SESSIONS = {}
 USER_MEDIA_GROUPS = {}
@@ -324,6 +345,7 @@ def main():
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     
+    threading.Thread(target=run_health_server, daemon=True).start()
     logger.info("Ron Carousel Agent (Full Gemini Intelligence) is live on Telegram! Waiting for messages...")
     app.run_polling()
 
